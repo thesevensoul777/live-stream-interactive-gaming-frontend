@@ -1,0 +1,100 @@
+<template>
+  <div class="container">
+    <div class="form-card">
+      <h2>登录</h2>
+      <input v-model="username" type="text" placeholder="账号" />
+      <input v-model="password" type="password" placeholder="密码" />
+      <div class="btn-group">
+        <button @click="onLogin">登录</button>
+        <button @click="$emit('switch', 'register')">注册</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script lang="ts" setup>
+import { ref } from 'vue'
+const { ipcRenderer } = window.require('electron')
+
+const username = ref('')
+const password = ref('')
+
+const emit = defineEmits<{
+  (e: 'switch', mode: 'login' | 'register' | 'main'): void
+}>()
+
+const onLogin = () => {
+  if (!username.value || !password.value) {
+    alert('请填写账号和密码')
+    return
+  }
+  alert(`登录成功: ${username.value}`)
+    // 告诉主进程放大窗口
+  ipcRenderer.send('maximize-window')
+  emit('switch', 'main')
+}
+</script>
+
+<style scoped>
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+  background-color: #f0f2f5;
+}
+
+.form-card {
+  width: 40vw;
+  min-width: 300px;
+  max-width: 600px;
+  padding: 2rem;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+.form-card h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.form-card input,
+.form-card button {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.btn-group {
+  display: flex;
+  justify-content: space-between;
+}
+
+.btn-group button {
+  flex: 1;
+  margin: 0 0.3rem;
+  padding: 0.6rem 0;
+  background-color: #409eff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-group button:hover {
+  background-color: #66b1ff;
+}
+</style>

@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-electron/
+out/
+
+# electron-builder
+release/
+build/
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# editor
+.vSCode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
