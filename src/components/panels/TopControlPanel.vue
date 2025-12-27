@@ -84,7 +84,7 @@ const { appendCasts, clearDanmu } = useDanmuStore()
 // 状态
 // 连接状态
 const connectStatus = ref<ConnectStatus>(0);
-const douyinId = ref<string>('294762946834')
+const douyinId = ref<string>('95679413409')
 const secret = ref<string>('1')
 
 

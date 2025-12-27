@@ -1,12 +1,29 @@
 <template>
   <div class="container">
     <div class="form-card">
-      <h2>登录</h2>
-      <input v-model="username" type="text" placeholder="账号" />
-      <input v-model="password" type="password" placeholder="密码" />
+      <h2>{{ isLogin ? '登录' : '注册' }}</h2>
+
+      <!-- 登录表单 -->
+      <template v-if="isLogin">
+        <input v-model="username" type="text" placeholder="账号" />
+        <input v-model="password" type="password" placeholder="密码" />
+      </template>
+
+      <!-- 注册表单 -->
+      <template v-else>
+        <input v-model="username" type="text" placeholder="账号" />
+        <input v-model="password" type="password" placeholder="密码" />
+        <input v-model="confirmPassword" type="password" placeholder="重复密码" />
+        <input v-model="douyin" type="text" placeholder="抖音号" />
+      </template>
+
       <div class="btn-group">
-        <button @click="onLogin">登录</button>
-        <button @click="$emit('switch', 'register')">注册</button>
+        <button @click="isLogin ? onLogin() : onRegister()">
+          {{ isLogin ? '登录' : '提交注册' }}
+        </button>
+        <button @click="toggleForm">
+          {{ isLogin ? '注册' : '返回登录' }}
+        </button>
       </div>
     </div>
   </div>
@@ -14,24 +31,69 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-const { ipcRenderer } = window.require('electron')
+import { registerApi } from '@/api/auth'
+
+const isLogin = ref(true) // true: 登录，false: 注册
 
 const username = ref('')
 const password = ref('')
+const confirmPassword = ref('')
+const douyin = ref('')
 
 const emit = defineEmits<{
   (e: 'switch', mode: 'login' | 'register' | 'main'): void
 }>()
 
-const onLogin = () => {
+const toggleForm = () => {
+  isLogin.value = !isLogin.value
+  // 切换表单时清空数据
+  username.value = ''
+  password.value = ''
+  confirmPassword.value = ''
+  douyin.value = ''
+}
+
+// 登录逻辑
+const onLogin = async () => {
   if (!username.value || !password.value) {
     alert('请填写账号和密码')
     return
   }
-  alert(`登录成功: ${username.value}`)
-    // 告诉主进程放大窗口
-  ipcRenderer.send('maximize-window')
-  emit('switch', 'main')
+
+  try {
+    // TODO: 替换为后端登录接口
+    // 例如 await loginApi({ username: username.value, password: password.value })
+    alert(`登录成功: ${username.value}`)
+    emit('switch', 'main')
+  } catch (err: any) {
+    alert(err.response?.data || '登录失败')
+  }
+}
+
+// 注册逻辑
+const onRegister = async () => {
+  if (!username.value || !password.value || !confirmPassword.value || !douyin.value) {
+    alert('请填写完整信息')
+    return
+  }
+
+  if (password.value !== confirmPassword.value) {
+    alert('密码和重复密码不一致')
+    return
+  }
+
+  try {
+    await registerApi({
+      username: username.value,
+      password: password.value,
+      douyinAccount: douyin.value
+    })
+
+    alert('注册成功')
+    toggleForm() // 切回登录
+  } catch (err: any) {
+    alert(err.response?.data || '注册失败')
+  }
 }
 </script>
 

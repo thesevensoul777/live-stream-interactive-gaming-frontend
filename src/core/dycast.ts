@@ -777,7 +777,6 @@ export class DyCast {
           data.user = this._getCastUser(message.user);
           data.gift = this._getCastGift(message.gift, message.repeatCount || message.comboCount, message.repeatEnd);
           data.time = message.common?.createTime? Number(message.common.createTime): Date.now();
-               console.log("gift", data.gift,data.user?.name)
           break;
         case CastMethod.LIKE:
           message = decodeLikeMessage(payload);

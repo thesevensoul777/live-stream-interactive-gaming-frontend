@@ -11,9 +11,6 @@
     <div class="cast-list-header">
       <!-- MAC 前缀 -->
       <div class="mac-prefix">
-        <div class="cir red"></div>
-        <div class="cir yellow"></div>
-        <div class="cir green"></div>
       </div>
       <!-- 标题 -->
       <div class="title">
@@ -21,7 +18,7 @@
   
       </div>
       <div class="type-icons">
-        <CastTypeBtn v-for="item in castTypes" :key="item.id" :type="item.type" @change="handleCastTypeBtn" />
+        <!-- <CastTypeBtn v-for="item in castTypes" :key="item.id" :type="item.type" @change="handleCastTypeBtn" /> -->
       </div>
     </div>
     <div class="cast-list-main">
@@ -56,6 +53,9 @@ import type { CastType } from '@/components/CastTypeBtn/type';
 import { getId } from '@/utils/idUtil';
 import CastItem from './CastItem.vue';
 import { CastMethod, type DyMessage } from '@/core/dycast';
+
+
+import { handleDanmu } from '@/core/actionRequests';
 import { throttle } from '@/utils/loashUtil';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { watch } from 'vue'
@@ -96,6 +96,11 @@ const castTypes = computed(() => {
     };
   });
 });
+
+
+function onDanmuReceived(msgs: DyMessage) {
+  handleDanmu(msgs);
+}
 
 
 /**
@@ -143,16 +148,21 @@ const casts = ref<DyMessage[]>([]);
  * 设置弹幕显示
  */
 const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
-  const list: DyMessage[] = msgs.filter(item => {
-    if (item.method) return !!typeMap.get(item.method);
-    else return false;
-  });
+  // 先筛选出符合条件的消息
+  const list: DyMessage[] = msgs.filter(item => item.method && typeMap.get(item.method));
+
+  // 对每条有效消息执行副作用
+  list.forEach(item => onDanmuReceived(item));
+
+  // 更新 casts
   if (isClear) casts.value = list;
   else casts.value.push(...list);
+
   nextTick(() => {
     autoScrollToBottom();
   });
 };
+
 /**
  * 清空弹幕
  */
