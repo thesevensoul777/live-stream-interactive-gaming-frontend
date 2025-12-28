@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { execFile } from 'child_process';
+import { registerIpcHandlers } from './ipcHandlers.js';
+import { injectWar3 } from './war3.js';
 
 // ES Module 下获取 __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -10,68 +12,8 @@ const __dirname = path.dirname(__filename);
 
 let win = null;
 
-// 1️⃣ 定义 JSON 文件路径
-const filePath = path.join(app.getPath('userData'), 'commandRequests.json');
-
-function injectWar3() {
-  const injectorPath = path.join(__dirname, '..', 'bin', 'War3Injector.exe');
-
-  execFile(injectorPath, [], (error, stdout, stderr) => {
-    if (error) {
-      console.error('Inject failed:', error);
-      return;
-    }
-    console.log('Injector output:', stdout);
-  });
-}
-
 injectWar3();
 
-ipcMain.handle('add-command', (event, payload) => {
-  // 1️⃣ 保存完整 JSON（日志）
-  let data = [];
-  try {
-    data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch {}
-
-  data.push({
-    msg: payload.msg,
-    action: payload.action,
-    time: Date.now(),
-  });
-
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-
-  // 2️⃣ 翻译成 Warcraft 指令
-  const user = payload.msg.user;
-  let war3Cmd = '';
-
-  switch (payload.action) {
-    case '加入':
-      war3Cmd = `JOIN|${user}`;
-      break;
-    case '上路':
-      war3Cmd = `MOVE|${user}|TOP`;
-      break;
-    case '中路':
-      war3Cmd = `MOVE|${user}|MID`;
-      break;
-    case '下路':
-      war3Cmd = `MOVE|${user}|BOT`;
-      break;
-  }
-
-  // 3️⃣ 写给 Warcraft（覆盖写即可）
-  if (war3Cmd) {
-    fs.writeFileSync(
-      path.join(app.getPath('userData'), 'war3_command.txt'),
-      war3Cmd,
-      'utf-8'
-    );
-  }
-
-  return true;
-});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -101,12 +43,6 @@ function createWindow() {
   });
 }
 
-// 接收放大窗口的请求
-ipcMain.on('maximize-window', () => {
-  if (win) {
-    win.setBounds({ x: 100, y: 100, width: 1300, height: 1000 });
-  }
-});
 
 app.whenReady().then(createWindow);
 
