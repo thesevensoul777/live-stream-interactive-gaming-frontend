@@ -336,7 +336,8 @@ function getSTUB(t) {
  * @param {string} uniqueId
  * @return {string} signature
  */
-export const getSignature = function (roomId, uniqueId) {
+
+export function getSignature(roomId, uniqueId) {
 
   const sdkVersion = '1.0.14-beta.0';
   const e = getSTUB(
@@ -356,7 +357,8 @@ export const getSignature = function (roomId, uniqueId) {
  * @param {number} length
  * @returns
  */
-export const getMsToken = function (length = 182) {
+
+export function getMsToken(length = 182) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   let result = '';
   for (let i = 0; i < length; i++) {

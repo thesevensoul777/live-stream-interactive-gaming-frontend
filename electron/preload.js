@@ -14,4 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   getCommands: () =>
     ipcRenderer.invoke('get-commands'),
+
+  
+  /**
+   * 获取所有已保存的命令
+   */
+  injectGame: () =>
+    ipcRenderer.invoke('inject-game'),
 });

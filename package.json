@@ -12,8 +12,12 @@
       "electron/**",
       "node_modules/**",
       "bin/**/*",
-      "package.json"
+      "package.json",
+      "!**/*.ts",             
+      "!**/*.map",          
+      "!**/tests/**/*"         
     ],
+    "asar": true,  
     "directories": {
       "buildResources": "build"
     },

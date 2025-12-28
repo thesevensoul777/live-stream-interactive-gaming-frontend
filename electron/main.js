@@ -12,9 +12,6 @@ const __dirname = path.dirname(__filename);
 
 let win = null;
 
-injectWar3();
-
-
 function createWindow() {
   win = new BrowserWindow({
     width: 1300,
@@ -41,6 +38,8 @@ function createWindow() {
       win.webContents.openDevTools({ mode: 'detach' });
     }
   });
+
+    registerIpcHandlers(win);
 }
 
 

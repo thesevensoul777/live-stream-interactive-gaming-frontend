@@ -7,6 +7,7 @@ export interface DanmuCommandDTO {
   time?: number;
 }
 
+
 // 弹幕内容 → 行为 映射表
 const COMMAND_MAP: Record<string, string> = {
   '1': '加入',
@@ -37,4 +38,21 @@ export function handleDanmu(msg: DyMessage) {
     .catch((err: any) => {
       console.error('发送命令失败', err);
     });
+}
+
+
+export function injectWar3(isInjected:boolean= true) {
+  if(!isInjected){
+(window as any).electronAPI
+    .injectGame()
+    .then(() => {
+
+      console.log(`已经注入`);
+    })
+    .catch((err: any) => {
+      console.error('注入失败', err);
+    });
+  }  
+
+
 }

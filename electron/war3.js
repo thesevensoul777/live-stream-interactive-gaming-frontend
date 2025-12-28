@@ -1,29 +1,49 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { execFile } from 'child_process';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 
 // ES 模块下获取 __filename 和 __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function getInjectorPath() {
+  // 开发环境
+  if (!app.isPackaged) {
+    return path.join(__dirname, '..', 'bin', 'War3Injector.exe');
+  }
+
+  // 打包后
+  return path.join(process.resourcesPath, 'bin', 'War3Injector.exe');
+}
+
+
 // JSON 文件路径
 const filePath = path.join(app.getPath('userData'), 'commandRequests.json');
-
 /**
  * 注入 War3
  */
-export function injectWar3() {
-  const injectorPath = path.join(__dirname, '..', 'bin', 'War3Injector.exe');
 
-  execFile(injectorPath, [], (error, stdout, stderr) => {
-    if (error) {
-      console.error('Inject failed:', error);
-      return;
+export function injectWar3() {
+  const injectorPath = getInjectorPath();
+
+
+  if (!fs.existsSync(injectorPath)) {
+    console.error('❌ War3Injector.exe not found');
+    return;
+  }
+
+  const command = `Start-Process -FilePath "${injectorPath}" -Verb RunAs`;
+
+  exec(
+    `powershell -Command "${command}"`,
+    (error, stdout, stderr) => {
+      if (error) console.error('[PS error]', error);
+      if (stderr) console.error('[PS stderr]', stderr);
+      console.log('[PS stdout]', stdout);
     }
-    console.log('Injector output:', stdout);
-  });
+  );
 }
 
 /**

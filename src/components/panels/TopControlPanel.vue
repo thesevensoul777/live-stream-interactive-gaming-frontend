@@ -12,7 +12,8 @@
   <!-- 抖音号 -->
   <div class="field">
     <span class="label">抖音号：</span>
-    <span class="text">{{ douyinId }}</span>
+      <input v-model="douyinId" placeholder="抖音号" />
+    <!-- <span class="text">{{ douyinId }}</span> -->
   </div>
 
   <!-- 秘钥 -->
@@ -76,7 +77,7 @@ import {
 } from '@/core/dycast'
 
 import { RelayCast } from '@/core/relay';
-
+import { injectWar3} from '@/core/actionRequests';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 
 const { appendCasts, clearDanmu } = useDanmuStore()
@@ -84,7 +85,7 @@ const { appendCasts, clearDanmu } = useDanmuStore()
 // 状态
 // 连接状态
 const connectStatus = ref<ConnectStatus>(0);
-const douyinId = ref<string>('675588713150')
+const douyinId = ref<string>('183812264090')
 const secret = ref<string>('1')
 
 
@@ -127,8 +128,9 @@ function toggleListen(): void {
     alert('请填写抖音号和秘钥')
     return
   }
+  connectLive();
+   injectWar3(false);
 
-  connectLive()
 }
 
 
@@ -145,6 +147,7 @@ function connectLive(): void {
       connectStatus.value = 1
       setRoomInfo(info)
       console.log("info",info)
+   
     })
 
     cast.on('error', (err: Error) => {
