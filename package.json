@@ -4,11 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electronmon electron/main.ts\"",
+    "dev": "concurrently \"vite\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electronmon electron/main.js\"",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "start": "electron electron/main.ts",
-    "build:preload": "tsc -p tsconfig.electron.json && node -e \"require('fs').renameSync('electron/preload.js','electron/dist/preload.cjs')\""
+    "start": "electron electron/main.js"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
