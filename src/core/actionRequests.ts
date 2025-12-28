@@ -19,22 +19,22 @@ export function handleDanmu(msg: DyMessage) {
   const userName = msg.user?.name;
   if (!userName) return;
 
-  const action = COMMAND_MAP[msg.content];
+  const action = msg.content ? COMMAND_MAP[msg.content] : undefined;
   if (!action) return; // 不关心的弹幕直接忽略
 
   const safeMsg: DanmuCommandDTO = {
     id: msg.id,
     user: userName,
-    content: msg.content,
+    content: msg.content ?? '',
     time: msg.time,
   };
 
-  window.electronAPI
+  (window as any).electronAPI
     .addCommand(safeMsg, action)
     .then(() => {
       console.log(`已发送命令请求: ${userName} -> ${action}`);
     })
-    .catch(err => {
+    .catch((err: any) => {
       console.error('发送命令失败', err);
     });
 }

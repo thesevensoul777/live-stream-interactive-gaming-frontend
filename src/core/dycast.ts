@@ -388,7 +388,7 @@ export class DyCast {
   // 即 如果 10000 ms 内都没接收到新消息，证明消息接收出错
   private downgradePingCount: number = 2;
 
-  private pingTimer: number | undefined = void 0;
+  private pingTimer: number | undefined |NodeJS.Timeout = void 0;
 
   // 上次接收时间
   private lastReceiveTime: number;
