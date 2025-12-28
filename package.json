@@ -8,7 +8,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "start": "electron electron/main.ts",
-    "build:preload": "tsc -p tsconfig.electron.json && node -e \"require('fs').renameSync('electron/dist/preload.js','electron/dist/preload.cjs')\""
+    "build:preload": "tsc -p tsconfig.electron.json && node -e \"require('fs').renameSync('electron/preload.js','electron/dist/preload.cjs')\""
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
