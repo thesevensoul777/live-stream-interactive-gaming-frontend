@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, net } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let win = null;
+let globalTtwid = '';
 
 function createWindow() {
   win = new BrowserWindow({
@@ -43,51 +44,79 @@ function createWindow() {
 
     registerIpcHandlers(win);
 }
-// function setupRequestHeaders() {
-//   // 拦截所有发往抖音域名请求
-//   const filter = {
-//     urls: ['wss://*.douyin.com/*', 'https://*.douyin.com/*']
-//   };
 
-//   session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-//     // 强制设置 Origin 和 Referer，这是 WebSocket 握手的关键
-//     details.requestHeaders['Origin'] = 'https://live.douyin.com';
-//     details.requestHeaders['Referer'] = 'https://live.douyin.com/';
-//     details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    
-//     callback({ requestHeaders: details.requestHeaders });
-//   });
-// }
 
-// 在 app.whenReady() 之后调用
-app.whenReady().then(() => {
-  // setupRequestHeaders();
-session.defaultSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-  // 1. 全局修改 User-Agent，移除 Electron 标识
+/**
+ * 自动获取最新的 ttwid
+ */
+async function refreshTtwid() {
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: 'GET',
+      url: 'https://live.douyin.com',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    request.on('response', (response) => {
+      // 获取响应头中的所有 set-cookie
+      const setCookies = response.headers['set-cookie'] || [];
+      
+      // 寻找包含 ttwid 的那一条
+      const ttwidCookie = setCookies.find(cookie => cookie.includes('ttwid='));
+      
+      if (ttwidCookie) {
+        // 提取 ttwid 的值（取第一个分号之前的内容）
+        globalTtwid = ttwidCookie.split(';')[0];
+        console.log('成功自动获取 ttwid:', globalTtwid);
+      } else {
+        console.warn('未能从响应头获取 ttwid，将使用备用值');
+      }
+      resolve(globalTtwid);
+    });
+
+    request.on('error', (error) => {
+      console.error('获取 ttwid 请求失败:', error);
+      resolve(null);
+    });
+
+    request.end();
+  });
+}
+
+// 在 appReady 中串行执行
+app.whenReady().then(async () => {
+  // 1. 先刷新获取 ttwid
+  await refreshTtwid();
+
+  // 2. 设置全局 User-Agent
   const fakeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-  
-  // 2. 拦截并修改请求头
-// main.ts
-session.defaultSession.webRequest.onBeforeSendHeaders(
-  { urls: ['https://*.douyin.com/*', 'wss://*.douyin.com/*'] },
-  (details, callback) => {
-    details.requestHeaders['User-Agent'] = fakeUA;
-    details.requestHeaders['Origin'] = 'https://live.douyin.com';
-    details.requestHeaders['Referer'] = 'https://live.douyin.com/';
+  session.defaultSession.setUserAgent(fakeUA);
 
-    // 修正点：必须包含 ttwid= 键名，否则服务端无法解析
-    const myTtwid = '1|cAknFJHs7ZJgh61ymJwA-S0_-_6KggDXO-YKFezv8FQ|1766383828|784f2d41d75067d258186b9ab2648d9811c830e5b77012c765162842d5301211';
-    
-    // 如果请求本身没带 cookie（生产环境通常没带），我们强行塞入
-    if (!details.requestHeaders['Cookie']) {
-      details.requestHeaders['Cookie'] = `ttwid=${myTtwid}`; 
-    } else if (!details.requestHeaders['Cookie'].includes('ttwid')) {
-      details.requestHeaders['Cookie'] += `; ttwid=${myTtwid}`;
+  // 3. 拦截请求头并注入动态获取的 ttwid
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ['https://*.douyin.com/*', 'wss://*.douyin.com/*'] },
+    (details, callback) => {
+      details.requestHeaders['User-Agent'] = fakeUA;
+      details.requestHeaders['Origin'] = 'https://live.douyin.com';
+      details.requestHeaders['Referer'] = 'https://live.douyin.com/';
+      
+      // 如果获取到了动态 ttwid，则注入
+      if (globalTtwid) {
+        // 如果原本没有 Cookie，直接赋值；如果有，追加
+        const currentCookie = details.requestHeaders['Cookie'] || '';
+        if (!currentCookie.includes('ttwid=')) {
+          details.requestHeaders['Cookie'] = currentCookie 
+            ? `${currentCookie}; ${globalTtwid}` 
+            : globalTtwid;
+        }
+      }
+      
+      callback({ requestHeaders: details.requestHeaders });
     }
+  );
 
-    callback({ requestHeaders: details.requestHeaders });
-  }
-);
   createWindow();
 });
 
