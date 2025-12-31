@@ -6,11 +6,21 @@ import { makeUrlParams, parseLiveHtml } from './util';
 /**
  * 请求直播间信息
  */
+// 你的业务文件
 export const fetchLiveInfo = async function (id: string) {
   try {
-    const html = await fetch(`/dylive/${id}`).then(res => res.text());
+    debugger;
+    // 1. 拼接完整的真实 URL (必须包含 https://)
+    // 假设目标是斗鱼，请替换为真实的域名
+    const targetUrl = `https://live.douyin.com/${id}`; 
+
+    // 2. 调用主进程方法 (解决跨域 + 解决路径错误)
+    // 注意：这里不再使用 window.fetch
+    const html = await (window as any).electronAPI.fetchLive(targetUrl);
+    
     return html;
   } catch (err) {
+    console.error(err);
     return Promise.reject(Error('Fetch Live Info Error'));
   }
 };
@@ -46,7 +56,7 @@ const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
 const BROWSER_VERSION =
   navigator.appVersion ||
-  '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
+  '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const BROWSER_NAME = navigator.appCodeName || 'Mozilla';
 const VERSION_CODE = 180800;
 
@@ -62,6 +72,7 @@ const defaultIMFetchParams = {
   browser_online: true,
   browser_platform: 'Win32',
   browser_version: BROWSER_VERSION,
+  update_version_code: '1.0.0',
   cookie_enabled: true,
   cursor: '',
   device_id: '',
@@ -92,30 +103,40 @@ const defaultIMFetchParams = {
  * @param roomNum 房间号；暂不需要
  */
 export const fetchImInfo = async function (roomId: string, uniqueId: string) {
-  // 请求需要一些关键参数：msToken、a_bogus
-  // 请求成功后会响应 protobuf 二进制数据，解码为 model 的 Response 类型
-  // 主要需要里面的 cursor、internal_ext 值
   try {
+    debugger;
     const msToken = getMsToken(184);
     const params = Object.assign({}, defaultIMFetchParams, {
       msToken,
       room_id: roomId,
       user_unique_id: uniqueId
     });
-    // 一个加密参数，须通过上侧 params 参数计算，感兴趣自己去逆向，这里不解析，不一定验证
     const aBogus = '00000000';
     Object.assign(params, {
       live_pc: roomId,
       a_bogus: aBogus
     });
-    const url = `/dylive/webcast/im/fetch/?${makeUrlParams(params)}`;
-    // 不清楚接口是否有 referer 验证，需要的话，得在服务器跨域配置处设置，这里配置无效
-    // const headers = {
-    //   Referer: `https://live.douyin.com/${roomNum}`
-    // };
-    const buffer = await fetch(url).then(res => res.arrayBuffer());
-    return buffer;
+
+    // 关键修复：判断环境，如果是生产环境（或者直接调用 IPC），必须补全域名
+    const isDev = import.meta.env.DEV;
+    // 注意：如果是打包后，这个判断建议改为 window.location.protocol === 'file:'
+    
+    const path = `/webcast/im/fetch/?${makeUrlParams(params)}`;
+    
+    // 强制补全域名，因为主进程 net.request 必须识别 https://
+    const fullUrl = `https://live.douyin.com${path}`; 
+
+    console.log('Final URL for IPC:', fullUrl);
+
+    // 调用 IPC
+    const uint8Array = await (window as any).electronAPI.fetchLiveBinary(fullUrl);
+    
+    return uint8Array.buffer.slice(
+      uint8Array.byteOffset, 
+      uint8Array.byteOffset + uint8Array.byteLength
+    );
   } catch (err) {
+    console.error(err);
     return Promise.reject(Error('Fetch Im Info Error'));
   }
 };

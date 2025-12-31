@@ -21,4 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   injectGame: () =>
     ipcRenderer.invoke('inject-game'),
+  
+  fetchLive: (url) => ipcRenderer.invoke('api:fetch-live', url),
+  
+  fetchLiveBinary: (url) => ipcRenderer.invoke('api:fetch-binary', url),
 });

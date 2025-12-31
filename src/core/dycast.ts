@@ -311,8 +311,14 @@ enum PayloadType {
 
 /** API */
 // const BASE_URL = 'wss://webcast5-ws-web-lf.douyin.com/webcast/im/push/v2/';
-const BASE_URL = `${location.origin.replace(/^http/, 'ws')}/socket/webcast/im/push/v2/`;
+//const BASE_URL = `${location.origin.replace(/^http/, 'ws')}/socket/webcast/im/push/v2/`;
 
+
+const WS_DOMAIN = import.meta.env.DEV  
+  ? 'wss://webcast3-ws-web-hl.douyin.com' // 抖音真实的 WS 域名
+  : location.origin.replace(/^http/, 'ws');
+
+const BASE_URL = `${WS_DOMAIN}/webcast/im/push/v2/`;
 /** SDK 版本 */
 const VERSION = '1.0.14-beta.0';
 
@@ -1071,10 +1077,18 @@ export class DyCast {
    * @param opts
    * @returns
    */
-  private _getSocketUrl(opts: DyCastOptions) {
-    const fullOpt = Object.assign({}, defaultOpts, opts);
-    return `${BASE_URL}?${this._mergeOptions(fullOpt)}`;
+private _getSocketUrl(opts: DyCastOptions) {
+  const fullOpt = Object.assign({}, defaultOpts, opts);
+  let baseUrl = BASE_URL;
+
+  // 如果发现地址还是以 file: 开头，说明是在打包环境下运行
+  if (baseUrl.startsWith('file')) {
+    // 强制修正为真实地址
+    baseUrl = 'wss://webcast3-ws-web-hl.douyin.com/webcast/im/push/v2/';
   }
+
+  return `${baseUrl}?${this._mergeOptions(fullOpt)}`;
+}
 
   /**
    * 将配置转换为 url 参数字符串
