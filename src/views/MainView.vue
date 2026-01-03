@@ -25,17 +25,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-
+import { ref, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 import MainSelector from '@/components/sidebar/MainSelector.vue'
 import TopControlPanel from '@/components/panels/TopControlPanel.vue'
 import DanmuList from '@/components/panels/DanmuList.vue'
 import RecordTable from '@/components/panels/RecordTable.vue'
-import UploadAttrList from '@/components/panels/UploadAttrList.vue'
 
 const currentGame = ref<'war3' | 'sc'>('war3')
+
+const authStore = useAuthStore()
+
+onMounted(async () => {
+  try {
+    await authStore.fetchCurrentUser()
+  } catch (e) {
+    console.error('获取当前用户失败', e)
+    // 可选：跳转登录页
+  }
+})
 </script>
 
 <style scoped>

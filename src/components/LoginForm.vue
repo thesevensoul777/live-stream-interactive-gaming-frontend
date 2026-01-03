@@ -3,108 +3,120 @@
     <div class="form-card">
       <h2>{{ isLogin ? '登录' : '注册' }}</h2>
 
-      <!-- 登录表单 -->
-      <template v-if="isLogin">
-        <input v-model="username" type="text" placeholder="账号" />
-        <input v-model="password" type="password" placeholder="密码" />
-      </template>
+      <form @submit.prevent="handleSubmit">
+        <input class="form-input" v-model.trim="formData.username" type="text" placeholder="账号" required />
+        <input class="form-input" v-model="formData.password" type="password" placeholder="密码" required />
 
-      <!-- 注册表单 -->
-      <template v-else>
-        <input v-model="username" type="text" placeholder="账号" />
-        <input v-model="password" type="password" placeholder="密码" />
-        <input v-model="confirmPassword" type="password" placeholder="重复密码" />
-        <input v-model="douyin" type="text" placeholder="抖音号" />
-      </template>
+        <template v-if="!isLogin">
+          <input class="form-input" v-model="formData.confirmPassword" type="password" placeholder="重复密码" required />
+          <input class="form-input" v-model.trim="formData.douyin" type="text" placeholder="抖音号" required />
+        </template>
 
-      <div class="btn-group">
-        <button @click="isLogin ? onLogin() : onRegister()">
-          {{ isLogin ? '登录' : '提交注册' }}
-        </button>
-        <button @click="toggleForm">
-          {{ isLogin ? '注册' : '返回登录' }}
-        </button>
-      </div>
+        <div class="btn-group">
+          <button type="submit" :disabled="loading" class="primary-btn">
+            {{ loading ? '提交中...' : (isLogin ? '登录' : '提交注册') }}
+          </button>
+          <button type="button" @click="toggleForm" :disabled="loading">
+            {{ isLogin ? '去注册' : '返回登录' }}
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { registerApi } from '@/api/auth'
+import { ref, reactive } from 'vue'
+import { registerApi, loginApi } from '@/api/auth'
 
-const isLogin = ref(true) // true: 登录，false: 注册
+const isLogin = ref(true)
+const loading = ref(false)
 
-const username = ref('')
-const password = ref('')
-const confirmPassword = ref('')
-const douyin = ref('')
+const access_token = localStorage.getItem('access_token');
+const exp = localStorage.getItem('token_exp');
+
+
+
+
+// Use reactive for object grouping to simplify state
+const formData = reactive({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  douyin: ''
+})
 
 const emit = defineEmits<{
   (e: 'switch', mode: 'login' | 'register' | 'main'): void
 }>()
 
+
+if (access_token && exp && Date.now() < Number(exp)) {
+   emit('switch', 'main');
+} 
+
 const toggleForm = () => {
   isLogin.value = !isLogin.value
-  // 切换表单时清空数据
-  username.value = ''
-  password.value = ''
-  confirmPassword.value = ''
-  douyin.value = ''
+  // Reset fields using Object.assign
+  Object.assign(formData, { username: '', password: '', confirmPassword: '', douyin: '' })
 }
 
-// 登录逻辑
-const onLogin = async () => {
-  if (!username.value || !password.value) {
-    alert('请填写账号和密码')
-    return
+const handleSubmit = async () => {
+  if (loading.value) return
+
+  // Basic Validation
+  if (!formData.username || !formData.password) return alert('请填写账号和密码')
+  
+  if (!isLogin.value) {
+    if (formData.password !== formData.confirmPassword) return alert('密码不一致')
+    if (!formData.douyin) return alert('请填写抖音号')
   }
 
+  loading.value = true
   try {
-    // TODO: 替换为后端登录接口
-    // 例如 await loginApi({ username: username.value, password: password.value })
-    alert(`登录成功: ${username.value}`)
-    emit('switch', 'main')
+    if (isLogin.value) {
+      const response=await loginApi({ 
+        username: formData.username, 
+        password: formData.password 
+      })
+      // 2. Validate Response (Depending on your API structure)
+    // If your API returns { success: true, token: '...' }
+    if (response.data&&response.data.data.accessToken) {
+      // 3. Persist Session
+      localStorage.setItem('access_token', response.data.data.accessToken);
+      localStorage.setItem('token_exp', (Date.now() + 7200 * 1000).toString());
+      // 4. Optional: Update global state (Pinia)
+      // authStore.setToken(response.data.token);
+
+      // 5. Navigate to Main
+      emit('switch', 'main');
+    } else {
+      throw new Error('Login response invalid');
+    }
+
+      
+    } else {
+      await registerApi({
+        username: formData.username,
+        password: formData.password,
+        douyinAccount: formData.douyin
+      })
+      alert('注册成功')
+      toggleForm()
+    }
   } catch (err: any) {
-    alert(err.response?.data || '登录失败')
+    alert(err.response?.data?.message || err.message || '操作失败')
+  } finally {
+    loading.value = false
   }
 }
 
-// 注册逻辑
-const onRegister = async () => {
-  if (!username.value || !password.value || !confirmPassword.value || !douyin.value) {
-    alert('请填写完整信息')
-    return
-  }
 
-  if (password.value !== confirmPassword.value) {
-    alert('密码和重复密码不一致')
-    return
-  }
 
-  try {
-    await registerApi({
-      username: username.value,
-      password: password.value,
-      douyinAccount: douyin.value
-    })
-
-    alert('注册成功')
-    toggleForm() // 切回登录
-  } catch (err: any) {
-    alert(err.response?.data || '注册失败')
-  }
-}
 </script>
 
 <style scoped>
-html, body, #app {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
+/* Scoped styles kept clean */
 .container {
   display: flex;
   justify-content: center;
@@ -115,48 +127,59 @@ html, body, #app {
 }
 
 .form-card {
-  width: 40vw;
-  min-width: 300px;
-  max-width: 600px;
-  padding: 2rem;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  width: 90%; /* Better mobile responsiveness */
+  max-width: 400px;
+  padding: 2.5rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
 }
 
-.form-card h2 {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.form-card input,
-.form-card button {
+input {
   width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 1rem;
-  padding: 0.6rem 1rem;
-  font-size: 1rem;
-  border-radius: 5px;
-  border: 1px solid #ccc;
+  margin-bottom: 1.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-color: #409eff;
 }
 
 .btn-group {
   display: flex;
-  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
 
-.btn-group button {
+button {
   flex: 1;
-  margin: 0 0.3rem;
-  padding: 0.6rem 0;
-  background-color: #409eff;
-  color: white;
-  border: none;
-  border-radius: 5px;
+  padding: 0.75rem 0;
+  border-radius: 6px;
   cursor: pointer;
+  border: 1px solid #dcdfe6;
+  background: #fff;
+  font-weight: 500;
 }
 
-.btn-group button:hover {
+.primary-btn {
+  background-color: #409eff;
+  color: #fff;
+  border: none;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary-btn:hover:not(:disabled) {
   background-color: #66b1ff;
+}
+.form-input{
+  width: 90%;
 }
 </style>

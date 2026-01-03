@@ -10,7 +10,7 @@ import { ref } from 'vue'
 import LoginForm from './components/LoginForm.vue'
 import MainView from './views/MainView.vue'
 
-const mode = ref<'login' | 'register' | 'main'>('main')
+const mode = ref<'login' | 'register' | 'main'>('login')
 
 const handleSwitch = (newMode: 'login' | 'register' | 'main') => {
   mode.value = newMode

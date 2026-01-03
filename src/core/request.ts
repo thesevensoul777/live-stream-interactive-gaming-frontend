@@ -9,7 +9,6 @@ import { makeUrlParams, parseLiveHtml } from './util';
 // 你的业务文件
 export const fetchLiveInfo = async function (id: string) {
   try {
-    debugger;
     // 1. 拼接完整的真实 URL (必须包含 https://)
     // 假设目标是斗鱼，请替换为真实的域名
     const targetUrl = `https://live.douyin.com/${id}`; 
@@ -104,7 +103,6 @@ const defaultIMFetchParams = {
  */
 export const fetchImInfo = async function (roomId: string, uniqueId: string) {
   try {
-    debugger;
     const msToken = getMsToken(184);
     const params = Object.assign({}, defaultIMFetchParams, {
       msToken,

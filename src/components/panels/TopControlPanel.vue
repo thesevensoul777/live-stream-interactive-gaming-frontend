@@ -64,7 +64,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref,useTemplateRef } from 'vue'
+import { ref,useTemplateRef,computed,watch  } from 'vue'
 import {
   CastMethod,
   DyCast,
@@ -79,6 +79,13 @@ import {
 import { RelayCast } from '@/core/relay';
 import { injectWar3} from '@/core/actionRequests';
 import { useDanmuStore } from '@/components/composables/DanmuData'
+import { useAuthStore } from '@/stores/auth'
+
+
+const authStore = useAuthStore()
+
+
+const user = computed(() => authStore.user)
 
 const { appendCasts, clearDanmu } = useDanmuStore()
 
@@ -289,6 +296,18 @@ const disconnectLive = function () {
 function send(): void {
   console.log('send gift', player.value, gift.value, count.value)
 }
+
+
+watch(
+  () => user.value?.douyinAccount,
+  (val) => {
+    if (val) {
+      douyinId.value = val
+    }
+  },
+  { immediate: true }
+)
+
 </script>
 
 

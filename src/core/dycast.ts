@@ -116,6 +116,7 @@ export interface CastGift {
   count?: number | string;
   // 礼物消息可能重复发送，0 表示第一次，未重复
   repeatEnd?: number;
+
 }
 
 /**

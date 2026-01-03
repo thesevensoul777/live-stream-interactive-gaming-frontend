@@ -4,6 +4,7 @@
   <table class="table">
     <thead>
       <tr>
+        <th>礼物id</th>
         <th>赠送人</th>
         <th>礼物</th>
         <th>数量</th>
@@ -14,6 +15,7 @@
 
     <tbody>
       <tr v-for="item in casts" :key="item.time">
+          <td>{{ item.gift?.id }}</td>
         <td>{{ item.user?.name }}</td>
         <td>{{ item.gift?.name }}</td>
         <td>{{ item.gift?.count }}</td>
@@ -32,6 +34,9 @@ import { watch,onMounted } from 'vue'
 import type { CastType } from '@/components/CastTypeBtn/type';
 import { CastMethod, type DyMessage } from '@/core/dycast';
 import { ref } from 'vue';
+import { pushGiftApi } from '@/api/gift'
+import type { GiftRecordRequest } from '@/api/dto/giftRecord'
+
 
 const { allCasts, mainCasts } = useDanmuStore()
 
@@ -93,9 +98,37 @@ const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
     if (item.method) return !!typeMap.get(item.method);
     else return false;
   });
+
+  if(list.length!=0)   pushGift(list);
   if (isClear) casts.value = list;
   else casts.value.push(...list);
 
+};
+
+
+const pushGift = async (rowData: DyMessage[]) => {
+  try {
+    const promises = rowData
+      .filter(row => row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1)
+      .map(row => 
+        pushGiftApi({
+          id: row.gift?.id,
+          name: row.gift?.name,
+          price: row.gift?.price,
+          type: row.gift?.type,
+          icon: row.gift?.icon,
+          count: row.gift?.count,
+          repeatEnd: row.gift?.repeatEnd,
+          senderId: row.user?.id,
+          senderName: row.user?.name,
+          gameTypeId:"261CE843-5F44-418A-8D10-E49F5DEB191D"
+        })
+      );
+
+    await Promise.all(promises);
+  } catch (err: any) {
+    alert(err.response?.data?.message || err.message || '操作失败');
+  }
 };
 
 
