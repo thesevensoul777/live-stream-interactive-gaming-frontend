@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, net } from 'electron'
-import { saveCommand ,injectWar3 } from './war3.js';
+import { BufferService } from './services/BufferService.js';
+import { injectWar3 ,saveCommand} from './war3.js';
 
 export function registerIpcHandlers(win) {
   ipcMain.handle('add-command', (event, payload) => {
     saveCommand(payload);
     return true;
   });
+  const bufferService = new BufferService()
+
 
   ipcMain.on('maximize-window', () => {
     if (win) {
@@ -13,6 +16,10 @@ export function registerIpcHandlers(win) {
     }
   });
 
+
+ipcMain.on('auth:setToken', (event, token) => {
+  bufferService.setAuthToken(token); // main process instance now has token
+});
 
 
 
@@ -81,5 +88,21 @@ ipcMain.handle('api:fetch-binary', async (event, url) => {
     request.end();
   });
 });
+
+
+
+
+ipcMain.on('buffer:addGift', (_, gift) => {
+  bufferService.addGift(gift)
+})
+
+ipcMain.on('buffer:addPlayerDelta', (_, delta) => {
+  bufferService.addPlayerDelta(delta)
+})
+
+ipcMain.on('buffer:sendPlayerDelta', async () => {
+  await bufferService.sendPlayerDelta()
+})
+
 }
 

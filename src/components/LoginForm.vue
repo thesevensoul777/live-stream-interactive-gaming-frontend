@@ -10,6 +10,9 @@
         <template v-if="!isLogin">
           <input class="form-input" v-model="formData.confirmPassword" type="password" placeholder="重复密码" required />
           <input class="form-input" v-model.trim="formData.douyin" type="text" placeholder="抖音号" required />
+ <input class="form-input" v-model.trim="formData.ActivationCode" type="text" placeholder="账号卡密" required />
+
+          
         </template>
 
         <div class="btn-group">
@@ -43,7 +46,9 @@ const formData = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  douyin: ''
+  douyin: '',
+  ActivationCode:'DY-AGENT-9F3A-K2M8'
+
 })
 
 const emit = defineEmits<{
@@ -85,6 +90,8 @@ const handleSubmit = async () => {
       // 3. Persist Session
       localStorage.setItem('access_token', response.data.data.accessToken);
       localStorage.setItem('token_exp', (Date.now() + 7200 * 1000).toString());
+
+       (window as any).auth.setToken(response.data.data.accessToken)
       // 4. Optional: Update global state (Pinia)
       // authStore.setToken(response.data.token);
 
@@ -99,7 +106,8 @@ const handleSubmit = async () => {
       await registerApi({
         username: formData.username,
         password: formData.password,
-        douyinAccount: formData.douyin
+        douyinAccount: formData.douyin,
+        ActivationCode:formData.ActivationCode
       })
       alert('注册成功')
       toggleForm()

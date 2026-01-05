@@ -36,10 +36,13 @@ import { CastMethod, type DyMessage } from '@/core/dycast';
 import { ref } from 'vue';
 import { pushGiftApi } from '@/api/gift'
 import type { GiftRecordRequest } from '@/api/dto/giftRecord'
-
+import type { PlayerDelta } from '@/api/dto/Player'
 
 const { allCasts, mainCasts } = useDanmuStore()
 
+const giftBuffer: GiftRecordRequest[] = []
+
+const playerDeltaMap = new Map<string, PlayerDelta>()
 
 /** 显示弹幕 */
 const casts = ref<DyMessage[]>([]);
@@ -106,30 +109,78 @@ const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
 };
 
 
-const pushGift = async (rowData: DyMessage[]) => {
-  try {
-    const promises = rowData
-      .filter(row => row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1)
-      .map(row => 
-        pushGiftApi({
-          id: row.gift?.id,
-          name: row.gift?.name,
-          price: row.gift?.price,
-          type: row.gift?.type,
-          icon: row.gift?.icon,
-          count: row.gift?.count,
-          repeatEnd: row.gift?.repeatEnd,
-          senderId: row.user?.id,
-          senderName: row.user?.name,
-          gameTypeId:"261CE843-5F44-418A-8D10-E49F5DEB191D"
-        })
-      );
+// const pushGift = async (rowData: DyMessage[]) => {
+//   try {
+//     const promises = rowData
+//       .filter(row => row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1)
+//       .map(row => 
+//         pushGiftApi({
+//           id: row.gift?.id,
+//           name: row.gift?.name,
+//           price: row.gift?.price,
+//           type: row.gift?.type,
+//           icon: row.gift?.icon,
+//           count: row.gift?.count,
+//           repeatEnd: row.gift?.repeatEnd,
+//           senderId: row.user?.id,
+//           senderName: row.user?.name,
+//           gameTypeId:"261CE843-5F44-418A-8D10-E49F5DEB191D"
+//         })
+//       );
 
-    await Promise.all(promises);
-  } catch (err: any) {
-    alert(err.response?.data?.message || err.message || '操作失败');
-  }
-};
+//     await Promise.all(promises);
+//   } catch (err: any) {
+//     alert(err.response?.data?.message || err.message || '操作失败');
+//   }
+
+
+// };
+
+
+const pushGift = async (rowData: DyMessage[]) => {
+  const tasks = rowData
+    .filter(row => row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1)
+    .map(row =>
+      onGiftReceived({
+        id: row.gift?.id,
+        name: row.gift?.name,
+        price: row.gift?.price,
+        type: row.gift?.type,
+        icon: row.gift?.icon,
+        count: row.gift?.count,
+        senderId: row.user?.id,
+        senderName: row.user?.name,
+        gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D"
+      })
+    )
+
+  await Promise.all(tasks)
+}
+
+
+
+const onGiftReceived = async (gift: GiftRecordRequest) =>{
+  (window as any).buffer.addGift(gift)
+}
+
+// function onKillEnemy(playerId: string, gameTypeId: string) {
+//   (window as any).buffer.addPlayerDelta({
+//     douyinUserId: playerId,
+//     gameTypeId,
+//     addedRankPoints: 10,
+//     addedTierPoints: 5
+//   })
+// }
+
+// function onGameWin(playerId: string, gameTypeId: string) {
+//   (window as any)..buffer.addPlayerDelta({
+//     douyinUserId: playerId,
+//     gameTypeId,
+//     addedRankPoints: 100,
+//     addedTierPoints: 50
+//   })
+// }
+
 
 
 watch(mainCasts, (newVal) => {

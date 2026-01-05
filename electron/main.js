@@ -69,7 +69,6 @@ async function refreshTtwid() {
       if (ttwidCookie) {
         // 提取 ttwid 的值（取第一个分号之前的内容）
         globalTtwid = ttwidCookie.split(';')[0];
-        console.log('成功自动获取 ttwid:', globalTtwid);
       } else {
         console.warn('未能从响应头获取 ttwid，将使用备用值');
       }

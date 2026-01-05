@@ -10,14 +10,15 @@ export interface CurrentUser {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<CurrentUser | null>(null)
-  const loading = ref(false)
 
+  const user = ref<CurrentUser | null>(null)
+  const loading = ref(false);
   async function fetchCurrentUser() {
     loading.value = true
     try {
       const res = await currentUserApi()
-      user.value = res.data.data
+      user.value = res.data.data;
+       (window as any).auth.setToken(localStorage.getItem('access_token'))
     } catch (err) {
       user.value = null
       throw err
@@ -28,7 +29,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     user.value = null
-    localStorage.removeItem('token')
+    localStorage.removeItem('access_token')
     localStorage.removeItem('token_exp')
   }
 
