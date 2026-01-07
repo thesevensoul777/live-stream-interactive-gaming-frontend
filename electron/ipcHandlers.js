@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, net } from 'electron'
+import { app, BrowserWindow, ipcMain, net,dialog  } from 'electron'
 import { BufferService } from './services/BufferService.js';
-import { injectWar3 ,saveCommand} from './war3.js';
+import { injectWar3 ,saveCommand ,getWarcraftPath} from './war3.js';
 
 export function registerIpcHandlers(win) {
   ipcMain.handle('add-command', (event, payload) => {
@@ -58,7 +58,6 @@ ipcMain.handle('api:fetch-binary', async (event, url) => {
   if (url.startsWith('/')) {
     finalUrl = `https://live.douyin.com${url}`;
   }
-  console.log(finalUrl,"finalUrl")
   return new Promise((resolve, reject) => {
     const request = net.request({
       method: 'GET',
@@ -89,6 +88,40 @@ ipcMain.handle('api:fetch-binary', async (event, url) => {
   });
 });
 
+
+
+
+ipcMain.handle('select-file', async (_event) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return null;
+
+  const result = await dialog.showOpenDialog(win, {
+    title: '请选择文件',
+    properties: ['openFile'], // 如果要选文件夹用 'openDirectory'
+    filters: [
+      { name: 'All Files', extensions: ['*'] }, // 可加具体后缀 ['txt', 'json'] 等
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  return result.filePaths[0]; // 返回选择的文件路径
+});
+
+ipcMain.handle('select-folder', async (_event) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return null;
+
+  const result = await dialog.showOpenDialog(win, {
+    title: '请选择文件夹',
+    properties: ['openDirectory'],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+   getWarcraftPath(result.filePaths[0])
+
+  return result.filePaths[0]; // 返回选择的文件夹路径
+});
 
 
 

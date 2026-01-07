@@ -18,7 +18,6 @@ export class BufferService {
 
 
     setAuthToken(token) {
-      console.log("setAuthToken",token)
     this.authToken = token;
   }
 

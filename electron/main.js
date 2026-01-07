@@ -26,7 +26,6 @@ function createWindow() {
       devTools: true,
     },
   });
-
   // 开发环境加载 Vite 服务器
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);

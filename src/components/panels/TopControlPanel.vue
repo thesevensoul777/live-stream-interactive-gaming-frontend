@@ -12,18 +12,25 @@
   <!-- 抖音号 -->
   <div class="field">
     <span class="label">抖音号：</span>
-      <input v-model="douyinId" placeholder="抖音号" />
+      <input class="field-input" v-model="douyinId" placeholder="抖音号" />
     <!-- <span class="text">{{ douyinId }}</span> -->
   </div>
 
   <!-- 秘钥 -->
   <div class="field">
     <span class="label">秘钥：</span>
-    <input v-model="secret" placeholder="秘钥" />
+    <input class="field-input" v-model="secret" placeholder="秘钥" />
   </div>
 
   <!-- 操作按钮 -->
   <div class="actions">
+
+    <button
+      :class="{'confirmed': confirmed}"
+      @click="chooseFolder"
+    >
+      {{ buttonText }}
+    </button>
     <button
       :class="connectStatus ==1 ? 'btn-running' : ''"
       @click="toggleListen"
@@ -34,8 +41,6 @@
     <button @click="stop">断开</button>
   </div>
 </div>
-
-
     <div class="row">
         <div class="field">
       <select v-model="player">
@@ -61,6 +66,7 @@
   </div>
       
     </div>
+    
   </div>
 </template>
 <script setup lang="ts">
@@ -92,7 +98,7 @@ const { appendCasts, clearDanmu } = useDanmuStore()
 // 状态
 // 连接状态
 const connectStatus = ref<ConnectStatus>(0);
-const douyinId = ref<string>('844740081525')
+const douyinId = ref<string>('10438864178')
 const secret = ref<string>('1')
 
 
@@ -115,11 +121,14 @@ const otherRef = useTemplateRef('otherEl');
 // 所有弹幕
 const allCasts: DyMessage[] = [];
 
-
 // 转发客户端
 let relayWs: RelayCast | undefined;
 
 
+
+const path = ref('')
+const confirmed = ref(false)
+const buttonText = ref('游戏文件夹')
 
 // 弹幕客户端
 let castWs: DyCast | undefined
@@ -187,6 +196,20 @@ function setRoomInfo(info?: DyLiveInfo): void {
   // TODO: 设置房间信息
 }
 
+
+async function chooseFolder() {
+  // @ts-ignore
+  const result = await (window as any).fileAPI.selectFolder()
+  if (result) {
+    path.value = result
+    confirmed.value = true
+    buttonText.value = '已确认'
+  } else {
+    // 用户取消选择时，恢复原状
+    confirmed.value = false
+    buttonText.value = '选择游戏文件夹'
+  }
+}
 
 /**
  * 处理消息列表
@@ -377,9 +400,17 @@ watch(
 .row select,
 .row input {
   height: 28px;
-  min-width: 140px;
+  min-width: 15px;
   padding: 0 10px;
   font-size: 14px;
+}
+button.confirmed {
+  background-color: #4caf50; /* 绿色 */
+  color: white;
+  border-color: #4caf50;
+}
+.field-input{
+  width: 7rem;
 }
 
 </style>

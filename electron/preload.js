@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 
+console.log('preload loaded');
+
+
+/* ================= Files And File folder ================= */
+
+contextBridge.exposeInMainWorld('fileAPI', {
+  selectFile: () => ipcRenderer.invoke('select-file'),
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+});
+
+
 /* ================= JWT Token Storage ================= */
 let authToken = null;
 

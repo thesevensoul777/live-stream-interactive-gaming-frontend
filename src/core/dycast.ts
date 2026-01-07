@@ -92,6 +92,8 @@ export interface LiveRankItem {
 }
 
 export interface CastUser {
+
+  realId?:string;
   // user.sec_uid | user.id_str
   id?: string;
   // user.nickname
@@ -896,6 +898,7 @@ export class DyCast {
   private _getCastUser(data?: User): CastUser | undefined {
     if (!data) return void 0;
     return {
+      realId:data.id,
       id: data.secUid,
       name: data.nickname,
       gender: data.gender,

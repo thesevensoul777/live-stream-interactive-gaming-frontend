@@ -99,6 +99,7 @@ const castTypes = computed(() => {
 
 
 function onDanmuReceived(msgs: DyMessage) {
+
   handleDanmu(msgs);
 
 }

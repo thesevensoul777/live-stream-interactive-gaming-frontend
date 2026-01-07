@@ -18,6 +18,7 @@ export interface GiftRecordRequest {
   senderName?:string;
   //游戏类型
   gameTypeId: string
+  
 
 }
 
