@@ -1,308 +1,157 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { Tools } from './until/tools.js';
-// ES 模块下获取 __filename 和 __dirname
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const tool = new Tools()
+const tool = new Tools();
 const fileWriteLocks = new Map();
+
 let CommandPath = '';
 let GiftPath = '';
 let LikePath = '';
 
+// 基础 JASS 模板
+const JASS_TEMPLATE = `function PreloadFiles takes nothing returns nothing
+    call Preload("")
+endfunction
+function AAA takes nothing returns nothing
+    call PreloadEnd(0.0)
+endfunction`;
 
-export function getWarcraftPath(paths){
-
-const dir = path.join(paths, 'GameData', 'TerritoryWars');
-CommandPath = path.join(dir, 'TerritoryWarsCmd-2147483648');
-GiftPath = path.join(dir, 'TerritoryWarsGift-2147483648');
-LikePath = path.join(dir, 'TerritoryWarsLike-2147483648');
-
+export function getWarcraftPath(paths) {
+    const dir = path.join(paths, 'GameData', 'TerritoryWars');
+    CommandPath = path.join(dir, 'TerritoryWarsCmd-2147483648');
+    GiftPath = path.join(dir, 'TerritoryWarsGift-2147483648');
+    LikePath = path.join(dir, 'TerritoryWarsLike-2147483648');
 }
-
-
-
-function getInjectorPath() {
-  // 开发环境
-  if (!app.isPackaged) {
-    return path.join(__dirname, '..', 'bin', 'War3Injector.exe');
-  }
-
-  // 打包后
-  return path.join(process.resourcesPath, 'bin', 'War3Injector.exe');
-}
-
-
-
 
 /**
- * 注入 War3
+ * 核心公共方法：向魔兽文件追加指令队列
  */
+async function writeToWarcraftQueue(filePath, dataString) {
+    await acquireFileLock(filePath);
+    try {
+        // 1. 等待文件被清空（没有业务关键字）
+        await waitUntilFileReadyByPath(filePath);
 
-export function injectWar3() {
-  // const injectorPath = getInjectorPath();
+        // 2. 读取当前内容
+        let content = "";
+        if (fs.existsSync(filePath)) {
+            content = fs.readFileSync(filePath, 'utf-8');
+        }
 
+        // 3. 如果文件结构不正确，使用基础模板初始化
+        if (!content.includes('function PreloadFiles')) {
+            content = JASS_TEMPLATE;
+        }
 
-  // if (!fs.existsSync(injectorPath)) {
-  //   console.error('❌ War3Injector.exe not found');
-  //   return;
-  // }
+        // 4. 定位插入点：在第一个 endfunction 之前插入
+        const insertPos = content.indexOf('endfunction');
+        if (insertPos === -1) {
+            content = JASS_TEMPLATE; // 结构彻底坏了就重置
+        }
 
-  // const command = `Start-Process -FilePath "${injectorPath}" -Verb RunAs`;
+        const injectLine = `    call SetPlayerName(Player(0), "${dataString}")\n`;
+        
+        // 5. 组合新内容：保留原有指令并追加新指令
+        const newContent = content.slice(0, insertPos) + injectLine + content.slice(insertPos);
 
-  // exec(
-  //   `powershell -Command "${command}"`,
-  //   (error, stdout, stderr) => {
-  //     if (error) console.error('[PS error]', error);
-  //     if (stderr) console.error('[PS stderr]', stderr);
-  //     console.log('[PS stdout]', stdout);
-  //   }
-  // );
+        fs.writeFileSync(filePath, newContent, 'utf-8');
+        console.log(`[Success] 数据已追加: ${path.basename(filePath)} -> ${dataString.substring(0, 30)}...`);
+
+    } finally {
+        releaseFileLock(filePath);
+    }
 }
+
+/**
+ * 等待魔兽处理完文件
+ */
+async function waitUntilFileReadyByPath(filePath, intervalMs = 100) {
+    while (true) {
+        if (!fs.existsSync(filePath)) return;
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            if (!content.includes('function PreloadFiles')) return;
+
+            // 只要不包含业务特征码，就认为魔兽已经读完并清空了
+            if (!content.includes('realId=') && !content.includes('type=')) {
+                return;
+            }
+        } catch (err) {
+            // 文件占用时略过本次循环
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+    }
+}
+
+// --- 业务接口 ---
 
 export async function saveCommand(payload) {
-  try {
-    await appendCommandPayload(payload);
-    return { ok: true };
-  } catch (err) {
-    console.error('[saveCommand failed]', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
-async function appendCommandPayload(payload, minBytes = 5) {
- await acquireFileLock(CommandPath);
-
-  try {
-
-        // 1. 严格等待 WC3 清空文件
-// 开头调用
-await waitUntilFileReadyByPath(CommandPath, 10, 500);
-
-
-    // 2. 基础脚本模板
-    const base = `
-function PreloadFiles takes nothing returns nothing
-    call Preload("")
-endfunction
-
-function AAA takes nothing returns nothing
-    call PreloadEnd(0.0)
-endfunction
-`.trim();
-
-    // 3. 文件不存在 → 直接写 base
-        fs.writeFileSync(CommandPath, base, 'utf-8');
-
-    // 4. 读取文件
-    let buf = fs.readFileSync(CommandPath);
-    let content = buf.toString('utf-8');
-
-    let preloadStart = content.indexOf('function PreloadFiles');
-
-    // 5. 找不到 PreloadFiles 的兜底处理
-    if (preloadStart === -1) {
-        if (buf.length < minBytes) {
-            console.warn('PreloadFiles 丢失且文件过小，已重建基础脚本');
-            fs.writeFileSync(CommandPath, base, 'utf-8');
-
-            content = base;
-            preloadStart = content.indexOf('function PreloadFiles');
-        } else {
-            throw new Error('找不到 PreloadFiles 函数（文件内容异常，已保护）');
-        }
+    try {
+        const fullText = `|realId=${tool.encodeValue(payload.msg.realId)}|` +
+                         `*user=${tool.encodeValue(payload.msg.user)}|` +
+                         `*command=${tool.encodeValue(payload.action)}|` +
+                         `*time=${payload.msg.time}|`;
+        
+        await writeToWarcraftQueue(CommandPath, fullText);
+        return { ok: true };
+    } catch (err) {
+        console.error('[saveCommand failed]', err);
+        return { ok: false, error: err.message };
     }
-
-    const endIndex = content.indexOf('endfunction', preloadStart);
-    if (endIndex === -1) {
-        throw new Error('找不到 PreloadFiles 的 endfunction');
-    }
-
-
-
- console.log(payload,"payload")
-
-    // 7. 构建命令文本
-    const fullText =
-        `|realId=${tool.encodeValue(payload.msg.realId)}|` +
-        `*user=${tool.encodeValue(payload.msg.user)}|` +
-        `*command=${tool.encodeValue(payload.action)}|` +
-        `*time=${payload.msg.time}|`;
-
-
-        const MAX_SEGMENTS_PER_WRITE = 5;
-
-    // 9. 生成 JASS 注入代码
-    let inject =
-            `    call SetPlayerName(Player(0), "${fullText}")\n` +
-            `    call Preload("")\n`;
-
-
-    // 10. 注入并写入
-    const newContent =
-        content.slice(0, endIndex) +
-        inject +
-        content.slice(endIndex);
-
-    fs.writeFileSync(CommandPath, newContent, 'utf-8');
-
-    console.log(
-        '命令已写入 WC3:',
-        fullText,
-        )
-    } finally {
-    releaseFileLock(CommandPath);
-  }
-  
-    
-    
 }
-
-
-// ----------------- 公共等待文件空闲 -----------------
-async function waitUntilFileReadyByPath(filePath, intervalMs = 500) {
-  while (true) {
-    if (!fs.existsSync(filePath)) return;
-
-    const content = fs.readFileSync(filePath, 'utf-8');
-    if (!content.includes('function PreloadFiles')) return;
-
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
-}
-
-
-
-
-
 
 export async function saveGift(msg) {
-  const payload = { type: 'GIFT', msg };
-  try {
-    await appendGiftPayload(payload);
-    return { ok: true };
-  } catch (err) {
-    console.error('[saveGift failed]', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+    try {
+        const encodedUser = tool.encodeValue(msg.user);
+        const encodedId = tool.encodeValue(msg.realId);
+        
+        const fullText = `|type=GIFT|` +
+                         `|realId=${encodedId}|` +
+                         `*user=${encodedUser || encodedId}|` +
+                         `*giftId=${msg.giftId}|` +
+                         `*time=${msg.time}|`;
+
+        await writeToWarcraftQueue(GiftPath, fullText);
+        return { ok: true };
+    } catch (err) {
+        console.error('[saveGift failed]', err);
+        return { ok: false };
+    }
 }
-
-
-async function appendGiftPayload(payload, minBytes = 5) {
-  await acquireFileLock(GiftPath);
-  try {
-    await waitUntilFileReadyByPath(GiftPath);
-
-    const base = `
-function PreloadFiles takes nothing returns nothing
-    call Preload("")
-endfunction
-
-function AAA takes nothing returns nothing
-    call PreloadEnd(0.0)
-endfunction
-`.trim();
-
-    fs.writeFileSync(GiftPath, base, 'utf-8');
-
-    let content = fs.readFileSync(GiftPath, 'utf-8');
-    const preloadStart = content.indexOf('function PreloadFiles');
-    const endIndex = content.indexOf('endfunction', preloadStart);
-    if (preloadStart === -1 || endIndex === -1) throw new Error('PreloadFiles 结构异常');
-
-    const encodedUser = tool.encodeValue(payload.msg.user);
-    const encodedId = tool.encodeValue(payload.msg.realId);
-    const safeUser = encodedUser.length > 0 ? encodedUser : encodedId;
-
-    const fullText =
-      `|type=GIFT|` +
-      `|realId=${encodedId}|` +
-      `*user=${safeUser}|` +
-      `*giftId=${payload.msg.giftId}|` +
-      `*time=${payload.msg.time}|`;
-
-    const inject =
-      `    call SetPlayerName(Player(0), "${fullText}")\n` +
-      `    call Preload("")\n`;
-
-    const newContent = content.slice(0, endIndex) + inject + content.slice(endIndex);
-    fs.writeFileSync(GiftPath, newContent, 'utf-8');
-
-    console.log('礼物已写入 WC3:', fullText);
-  } finally {
-    releaseFileLock(GiftPath);
-  }
-}
-
-
-
 
 export async function saveLike(msg) {
-  const payload = { type: 'LIKE', msg };
-  try {
-    await appendLikePayload(payload);
-    return { ok: true };
-  } catch (err) {
-    console.error('[saveLike failed]', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+    try {
+        const fullText = `|type=LIKE|` +
+                         `|realId=${tool.encodeValue(msg.realId)}|` +
+                         `*user=${tool.encodeValue(msg.user)}|` +
+                         `*likeCount=${msg.likeCount}|` +
+                         `*time=${msg.time}|`;
+
+        await writeToWarcraftQueue(LikePath, fullText);
+        return { ok: true };
+    } catch (err) {
+        console.error('[saveLike failed]', err);
+        return { ok: false };
+    }
 }
 
-async function appendLikePayload(payload, minBytes = 5) {
-  await acquireFileLock(LikePath);
-  try {
-    await waitUntilFileReadyByPath(LikePath);
-
-    const base = `
-function PreloadFiles takes nothing returns nothing
-    call Preload("")
-endfunction
-
-function AAA takes nothing returns nothing
-    call PreloadEnd(0.0)
-endfunction
-`.trim();
-
-    fs.writeFileSync(LikePath, base, 'utf-8');
-
-    let content = fs.readFileSync(LikePath, 'utf-8');
-    const preloadStart = content.indexOf('function PreloadFiles');
-    const endIndex = content.indexOf('endfunction', preloadStart);
-    if (preloadStart === -1 || endIndex === -1) throw new Error('PreloadFiles 结构异常');
-
-    const encodedUser = tool.encodeValue(payload.msg.user);
-    const encodedId = tool.encodeValue(payload.msg.realId);
-    const safeUser = encodedUser.length > 0 ? encodedUser : encodedId;
-
-    const fullText =
-      `|type=LIKE|` +
-      `|realId=${encodedId}|` +
-      `*user=${safeUser}|` +
-      `*likeCount=${payload.msg.likeCount}|` +
-      `*time=${payload.msg.time}|`;
-
-    const inject =
-      `    call SetPlayerName(Player(0), "${fullText}")\n` +
-      `    call Preload("")\n`;
-
-    const newContent = content.slice(0, endIndex) + inject + content.slice(endIndex);
-    fs.writeFileSync(LikePath, newContent, 'utf-8');
-
-    console.log('点赞已写入 WC3:', fullText);
-  } finally {
-    releaseFileLock(LikePath);
-  }
-}
-
+// --- 锁机制 ---
 async function acquireFileLock(filePath) {
-  while (fileWriteLocks.get(filePath)) {
-    await new Promise(r => setTimeout(r, 10));
-  }
-  fileWriteLocks.set(filePath, true);
+    while (fileWriteLocks.get(filePath)) {
+        await new Promise(r => setTimeout(r, 10));
+    }
+    fileWriteLocks.set(filePath, true);
 }
 
 function releaseFileLock(filePath) {
-  fileWriteLocks.set(filePath, false);
+    fileWriteLocks.set(filePath, false);
+}
+
+export function injectWar3(){
+
 }

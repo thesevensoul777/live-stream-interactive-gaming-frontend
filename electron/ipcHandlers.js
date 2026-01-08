@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, net,dialog  } from 'electron'
 import { BufferService } from './services/BufferService.js';
 import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike} from './war3.js';
 
-
   const bufferService = new BufferService()
 
 
@@ -173,5 +172,20 @@ ipcMain.on('buffer:sendPlayerDelta', async () => {
   await bufferService.sendPlayerDelta()
 })
 
+
+
+// --- 新增：监听渲染层发出的指令 ---
+ipcMain.on('open-overlay', () => {
+  if (!overlayWin) {
+    createOverlayWindow();
+    console.log('特效窗口已开启');
+  }
+});
+
+ipcMain.on('close-overlay', () => {
+  if (overlayWin) {
+    overlayWin.close();
+  }
+});
 }
 
