@@ -4,7 +4,7 @@ const api = axios.create({
   baseURL:
     import.meta.env.MODE === 'development'
       ? 'http://localhost:5150'
-      : 'https://your-production-domain.com',
+      : 'http://localhost:5150',
   timeout: 5000,
 });
 

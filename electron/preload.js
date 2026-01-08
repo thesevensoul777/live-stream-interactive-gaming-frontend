@@ -88,3 +88,17 @@ contextBridge.exposeInMainWorld('buffer', {
    */
   getAuthToken: () => authToken
 });
+
+
+/* ================= Open New Window ================= */
+contextBridge.exposeInMainWorld('newWindow', {
+  /**
+   * 开启特效/绿幕窗口
+   */
+  openOverlay: () => ipcRenderer.send('open-overlay'),
+  
+  /**
+   * 关闭特效/绿幕窗口
+   */
+  closeOverlay: () => ipcRenderer.send('close-overlay'),
+});

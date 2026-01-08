@@ -63,6 +63,7 @@
   
   <div class="actions">
 <button @click="send">补送</button>
+<button @click="openOverlay">开启特效</button>
   </div>
       
     </div>
@@ -323,6 +324,10 @@ const disconnectLive = function () {
 
 function send(): void {
   console.log('send gift', player.value, gift.value, count.value)
+}
+
+function openOverlay() {
+  (window as any).newWindow.openOverlay();
 }
 
 

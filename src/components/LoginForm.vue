@@ -1,18 +1,46 @@
 <template>
-  <div class="container">
+  <div class="login-inner-container">
     <div class="form-card">
       <h2>{{ isLogin ? '登录' : '注册' }}</h2>
 
       <form @submit.prevent="handleSubmit">
-        <input class="form-input" v-model.trim="formData.username" type="text" placeholder="账号" required />
-        <input class="form-input" v-model="formData.password" type="password" placeholder="密码" required />
+        <input 
+          class="form-input" 
+          v-model.trim="formData.username" 
+          type="text" 
+          placeholder="账号" 
+          required 
+        />
+        <input 
+          class="form-input" 
+          v-model="formData.password" 
+          type="password" 
+          placeholder="密码" 
+          required 
+        />
 
         <template v-if="!isLogin">
-          <input class="form-input" v-model="formData.confirmPassword" type="password" placeholder="重复密码" required />
-          <input class="form-input" v-model.trim="formData.douyin" type="text" placeholder="抖音号" required />
- <input class="form-input" v-model.trim="formData.ActivationCode" type="text" placeholder="账号卡密" required />
-
-          
+          <input 
+            class="form-input" 
+            v-model="formData.confirmPassword" 
+            type="password" 
+            placeholder="重复密码" 
+            required 
+          />
+          <input 
+            class="form-input" 
+            v-model.trim="formData.douyin" 
+            type="text" 
+            placeholder="抖音号" 
+            required 
+          />
+          <input 
+            class="form-input" 
+            v-model.trim="formData.ActivationCode" 
+            type="text" 
+            placeholder="账号卡密" 
+            required 
+          />
         </template>
 
         <div class="btn-group">
@@ -29,47 +57,47 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router' // 引入路由
 import { registerApi, loginApi } from '@/api/auth'
 
+const router = useRouter() // 获取路由实例
 const isLogin = ref(true)
 const loading = ref(false)
 
-const access_token = localStorage.getItem('access_token');
-const exp = localStorage.getItem('token_exp');
-
-
-
-
-// Use reactive for object grouping to simplify state
+// 响应式数据
 const formData = reactive({
   username: '',
   password: '',
   confirmPassword: '',
   douyin: '',
-  ActivationCode:'DY-AGENT-9F3A-K2M8'
-
+  ActivationCode: 'DY-AGENT-9F3A-K2M8'
 })
 
-const emit = defineEmits<{
-  (e: 'switch', mode: 'login' | 'register' | 'main'): void
-}>()
+// 自动登录逻辑：放在 onMounted 中确保组件加载后跳转
+onMounted(() => {
+  const access_token = localStorage.getItem('access_token');
+  const exp = localStorage.getItem('token_exp');
+  if (access_token && exp && Date.now() < Number(exp)) {
+    router.push('/main'); // 使用路由跳转
+  }
+})
 
-
-if (access_token && exp && Date.now() < Number(exp)) {
-   emit('switch', 'main');
-} 
-
+// 切换登录/注册模式
 const toggleForm = () => {
   isLogin.value = !isLogin.value
-  // Reset fields using Object.assign
-  Object.assign(formData, { username: '', password: '', confirmPassword: '', douyin: '' })
+  Object.assign(formData, { 
+    username: '', 
+    password: '', 
+    confirmPassword: '', 
+    douyin: '' 
+  })
 }
 
 const handleSubmit = async () => {
   if (loading.value) return
 
-  // Basic Validation
+  // 基础校验
   if (!formData.username || !formData.password) return alert('请填写账号和密码')
   
   if (!isLogin.value) {
@@ -80,34 +108,34 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     if (isLogin.value) {
-      const response=await loginApi({ 
+      // 执行登录
+      const response = await loginApi({ 
         username: formData.username, 
         password: formData.password 
       })
-      // 2. Validate Response (Depending on your API structure)
-    // If your API returns { success: true, token: '...' }
-    if (response.data&&response.data.data.accessToken) {
-      // 3. Persist Session
-      localStorage.setItem('access_token', response.data.data.accessToken);
-      localStorage.setItem('token_exp', (Date.now() + 7200 * 1000).toString());
 
-       (window as any).auth.setToken(response.data.data.accessToken)
-      // 4. Optional: Update global state (Pinia)
-      // authStore.setToken(response.data.token);
+      if (response.data && response.data.data.accessToken) {
+        // 保存 Token 和过期时间 (2小时)
+        localStorage.setItem('access_token', response.data.data.accessToken);
+        localStorage.setItem('token_exp', (Date.now() + 7200 * 1000).toString());
 
-      // 5. Navigate to Main
-      emit('switch', 'main');
+        // 将 Token 传给主进程（IPC）
+        if ((window as any).auth) {
+          (window as any).auth.setToken(response.data.data.accessToken)
+        }
+        console.log("dengluchenggong")
+        // 使用路由跳转到主界面
+        router.push('/main'); 
+      } else {
+        throw new Error('登录响应数据异常');
+      }
     } else {
-      throw new Error('Login response invalid');
-    }
-
-      
-    } else {
+      // 执行注册
       await registerApi({
         username: formData.username,
         password: formData.password,
         douyinAccount: formData.douyin,
-        ActivationCode:formData.ActivationCode
+        ActivationCode: formData.ActivationCode
       })
       alert('注册成功')
       toggleForm()
@@ -118,41 +146,47 @@ const handleSubmit = async () => {
     loading.value = false
   }
 }
-
-
-
 </script>
 
 <style scoped>
-/* Scoped styles kept clean */
-.container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* 关键修改：让最外层容器占据整个屏幕高度，并开启 Flex 居中 */
+.login-inner-container {
   width: 100%;
-  height: 100vh;
-  background-color: #f0f2f5;
+  min-height: 100vh; /* 必须有高度，flex 垂直居中才有效 */
+  display: flex;
+  justify-content: center; /* 水平居中 */
+  align-items: center;     /* 垂直居中 */
+  background-color: #f0f2f5; /* 加上背景色，让登录框更明显 */
 }
 
 .form-card {
-  width: 90%; /* Better mobile responsiveness */
+  width: 90%; /* 适配小窗口 */
   max-width: 400px;
   padding: 2.5rem;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+  /* 确保在 Electron 窗口大小改变时依然稳定 */
+  margin: 20px; 
 }
 
-input {
+h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.form-input {
   width: 100%;
   margin-bottom: 1.2rem;
   padding: 0.75rem 1rem;
   border: 1px solid #dcdfe6;
   border-radius: 6px;
   transition: border-color 0.2s;
+  box-sizing: border-box; 
 }
 
-input:focus {
+.form-input:focus {
   outline: none;
   border-color: #409eff;
 }
@@ -171,6 +205,7 @@ button {
   border: 1px solid #dcdfe6;
   background: #fff;
   font-weight: 500;
+  transition: all 0.2s;
 }
 
 .primary-btn {
@@ -179,15 +214,12 @@ button {
   border: none;
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .primary-btn:hover:not(:disabled) {
   background-color: #66b1ff;
 }
-.form-input{
-  width: 90%;
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
