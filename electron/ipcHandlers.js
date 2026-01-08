@@ -1,13 +1,49 @@
 import { app, BrowserWindow, ipcMain, net,dialog  } from 'electron'
 import { BufferService } from './services/BufferService.js';
-import { injectWar3 ,saveCommand ,getWarcraftPath} from './war3.js';
+import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike} from './war3.js';
+
+
+  const bufferService = new BufferService()
+
+
+
 
 export function registerIpcHandlers(win) {
-  ipcMain.handle('add-command', (event, payload) => {
-    saveCommand(payload);
-    return true;
+  ipcMain.handle('add-command', async (event, payload) => {
+    try {
+      // 确保 await 保存操作完成
+      await saveCommand(payload);
+      return { ok: true };
+    } catch (err) {
+      console.error('[add-command failed]', err);
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   });
-  const bufferService = new BufferService()
+
+ipcMain.handle('add-gift', async (_, payload) => {
+  try {
+    const res = await saveGift(payload);
+    return res;
+  } catch (err) {
+    console.error('[ipc add-gift failed]', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+
+ipcMain.handle('add-like', async (_, payload) => {
+  try {
+    const res = await saveLike(payload);
+    return res;
+  } catch (err) {
+    console.error('[ipc add-like failed]', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
 
 
   ipcMain.on('maximize-window', () => {

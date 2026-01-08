@@ -86,6 +86,7 @@ import { RelayCast } from '@/core/relay';
 import { injectWar3} from '@/core/actionRequests';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { useAuthStore } from '@/stores/auth'
+import { handleDanmu } from '@/core/actionRequests';
 
 
 const authStore = useAuthStore()
@@ -271,9 +272,11 @@ const handleMessages = function (msgs: DyMessage[]) {
       }
     }
   } catch (err) {}
-  // 记录
-
   allCasts.push(...newCasts);
+
+
+ handleDanmu(newCasts);
+
   appendCasts(allCasts, mainCasts, otherCasts)
   if (relayWs && relayWs.isConnected()) {
     relayWs.send(JSON.stringify(msgs));
@@ -281,6 +284,8 @@ const handleMessages = function (msgs: DyMessage[]) {
 
 
 };
+
+
 
 
 function stop(): void {

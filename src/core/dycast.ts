@@ -150,6 +150,7 @@ export interface DyMessage {
   room?: LiveRoom;
   rank?: LiveRankItem[];
   time?: number; 
+  likeCount?:string;
 }
 
 export enum CastMethod {
@@ -791,6 +792,7 @@ export class DyCast {
           message = decodeLikeMessage(payload);
           data.method = CastMethod.LIKE;
           data.user = this._getCastUser(message.user);
+          data.likeCount=message.count;
           data.content = `为主播点赞了(${message.count})`;
           data.room = { likeCount: message.total };
           data.time = message.common?.createTime? Number(message.common.createTime): Date.now();

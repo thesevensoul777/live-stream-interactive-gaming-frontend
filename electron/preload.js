@@ -35,9 +35,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Send a command to the main process
    */
-  addCommand: (msg, action) =>
-    ipcRenderer.invoke('add-command', { msg, action }),
+  addCommand: (msg, action) =>ipcRenderer.invoke('add-command', { msg, action }),
+    /**
+   * 礼物事件
+   */
+  addGift: (msg) =>ipcRenderer.invoke('add-gift', msg),
 
+  /**
+   * 点赞事件
+   */
+  addLike: (msg) =>ipcRenderer.invoke('add-like', msg),
+
+    /**
+   * 点赞事件
+   */
   getCommands: () =>
     ipcRenderer.invoke('get-commands'),
 

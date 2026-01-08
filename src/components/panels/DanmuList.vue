@@ -98,11 +98,6 @@ const castTypes = computed(() => {
 });
 
 
-function onDanmuReceived(msgs: DyMessage) {
-
-  handleDanmu(msgs);
-
-}
 
 
 /**
@@ -153,8 +148,8 @@ const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
   // 先筛选出符合条件的消息
   const list: DyMessage[] = msgs.filter(item => item.method && typeMap.get(item.method));
 
-  // 对每条有效消息执行副作用
-  list.forEach(item => onDanmuReceived(item));
+
+  handleDanmu(list);
 
   // 更新 casts
   if (isClear) casts.value = list;
