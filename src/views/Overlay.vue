@@ -1,6 +1,5 @@
 <template>
   <div class="green-screen-wrapper">
-    
     <div class="top-rank-bar">
       <div v-for="(user, index) in topThree" :key="index" :class="['rank-slot', `rank-${index + 1}`]">
         <div class="avatar-box">
@@ -9,30 +8,13 @@
         </div>
         <div class="user-meta">
           <div class="nickname">{{ user.nickname }}</div>
-          <div class="score">{{  0 }} pts</div>
+          <div class="score">{{ user.totalScore || 0 }} pts</div>
         </div>
       </div>
     </div>
 
-    <div class="gift-safe-zone">
-      <transition-group name="gift-list">
-        <div 
-          v-for="gift in giftQueue" 
-          :key="gift.id" 
-          class="gift-bubble"
-        >
-          <div class="sender-avatar">
-            <img :src="gift.avatar || defaultAvatar" />
-          </div>
-          <div class="gift-text">
-            <span class="user-name">{{ gift.user }}</span>
-            <span class="action">送出</span>
-            <span class="gift-name">{{ gift.giftName }}</span>
-          </div>
-          <div class="gift-count">x{{ gift.count }}</div>
-        </div>
-      </transition-group>
-    </div>
+    <GiftSlideNotify ref="leftNotify" :direction="1" />
+    <GiftSlideNotify ref="rightNotify" :direction="2" />
 
     <transition name="zoom">
       <div v-if="showRankList" class="full-rank-overlay">
@@ -51,157 +33,132 @@
       </div>
     </transition>
   </div>
-</template>
+</template>       
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useDanmuStore } from '@/components/composables/DanmuData'
+import GiftSlideNotify from '@/components/giftSlide/GiftSlideNotify.vue'
+import type { GifddDTO, LikeDTO } from "@/types/danmu"
 
-interface GiftItem {
-  id: string | number
-  user: string
-  avatar: string
-  giftName: string
-  count: number
-}
-
+// --- 数据与状态 ---
+const { currentPlay } = useDanmuStore()
 const defaultAvatar = 'https://via.placeholder.com/50'
-const giftQueue = ref<GiftItem[]>([])
+
+const leftNotify = ref()
+const rightNotify = ref()
 const showRankList = ref(false)
 const topThree = ref<any[]>([])
 const fullRanks = ref<any[]>([])
+let cleanup: any = null
 
-// 处理礼物进入
-const handleNewGift = (payload: any) => {
-  const { detail, ranks } = payload
-  
-  if (ranks) {
-    fullRanks.value = ranks
-    topThree.value = ranks.slice(0, 3)
+// --- 核心业务：拦截与分发 ---
+const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
+  // 兼容数据结构 (如果是从 IPC 传过来的 payload 包含 ranks)
+  const data = payload.detail || payload;
+  if (payload.ranks) {
+    fullRanks.value = payload.ranks;
+    topThree.value = payload.ranks.slice(0, 3);
   }
 
-  const newGift: GiftItem = {
-    id: Date.now() + Math.random(),
-    user: detail.user || detail.nickname,
-    avatar: detail.avatar,
-    giftName: detail.giftName || detail.gift?.name,
-    count: detail.count || detail.gift?.count || 1
+  if (!data.realId) return;
+
+  // 1. 查询该用户是否在 currentPlay 中 (之前发过 1 或 2)
+  const player = currentPlay.value.find(p => p.realId === data.realId);
+
+  // 💡 只有在列表中的人送礼/点赞才显示特效
+  if (!player) {
+    console.log(`[Overlay] 拦截路人 ${data.user} 的消息`);
+    return;
+  }
+  // 2. 构造显示对象
+  const notification = {
+    id: `${type.toLowerCase()}-${Date.now()}-${Math.random()}`,
+    type: type,
+    user: data.user || player.user,
+    avatar: data.avatar || player.avatar,
+    label: type === 'GIFT' ? '送出' : '点赞了',
+    content: type === 'GIFT' ? (data.giftName || '礼物') : '直播间',
+    count: type === 'GIFT' ? (data.count || 1) : (data.likeCount || 1)
   }
 
-  // 限制同时显示的礼物数量，防止刷屏
-  if (giftQueue.value.length > 5) {
-    giftQueue.value.shift();
+  // 3. 根据玩家之前的指令内容分发方向
+  if (player.content === '1') {
+    leftNotify.value?.push(notification);
+  } else if (player.content === '2') {
+    rightNotify.value?.push(notification);
   }
-  
-  giftQueue.value.push(newGift)
-
-  setTimeout(() => {
-    giftQueue.value = giftQueue.value.filter(g => g.id !== newGift.id)
-  }, 5000)
 }
 
+// --- 按键监听 ---
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Tab') {
-    e.preventDefault()
-    showRankList.value = true
+    e.preventDefault();
+    showRankList.value = true;
   }
 }
-
 const handleKeyUp = (e: KeyboardEvent) => {
-  if (e.key === 'Tab') showRankList.value = false
+  if (e.key === 'Tab') showRankList.value = false;
 }
 
+// --- 生命周期 ---
 onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
 
-  // 增加安全检查
-  if ((window as any).electron && (window as any).electron.ipcRenderer) {
-     (window as any).ipcRenderer.on('on-new-gift', handleNewGift)
-  window.addEventListener('keydown', handleKeyDown)
-  window.addEventListener('keyup', handleKeyUp)
-  } else {
-    console.error("检测到 window.electron 未定义。这通常是 Preload 脚本加载失败导致的。");
-  }
 
-  
+
+// 2. 监听玩家列表同步 (关键：确保特效能匹配到人)
+
+    (window as any).electronAPI.onSyncPlayers((players: any[]) => {
+      console.log("Overlay 已同步最新玩家列表:", players);
+      currentPlay.value = players;
+    });
+
+ 
+    cleanup = (window as any).newWindow.listening(
+      (gift: GifddDTO) => processNotification(gift, 'GIFT'),
+      (like: LikeDTO) => processNotification(like, 'LIKE')
+    )
 
 })
 
 onUnmounted(() => {
-  (window as any).ipcRenderer.removeAllListeners('on-new-gift')
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  if (cleanup) cleanup();
 })
 </script>
 
 <style scoped>
-/* 1. 基础容器：OBS采集建议开启色度键扣除绿色 */
+/* 核心：确保绿幕背景充满全屏 */
 .green-screen-wrapper {
   width: 100vw;
   height: 100vh;
-  background-color: #00ff00; /* 纯绿幕 */
-  color: white;
-  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-  overflow: hidden;
+  background-color: #00ff00 !important; /* 强制纯绿 */
   position: relative;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 
-/* 2. 顶部前三横条 */
+/* 顶部榜单 */
 .top-rank-bar {
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
+  gap: 40px;
   padding: 15px;
   background: rgba(0, 0, 0, 0.4);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
 }
 .rank-slot { display: flex; align-items: center; gap: 10px; }
 .avatar-box { position: relative; }
 .avatar-img { width: 45px; height: 45px; border-radius: 50%; border: 2px solid gold; }
 .rank-tag { position: absolute; bottom: -5px; right: -5px; background: gold; color: black; font-size: 10px; padding: 0 4px; border-radius: 4px; font-weight: bold; }
-.user-meta .nickname { font-size: 14px; font-weight: bold; }
+.user-meta .nickname { font-size: 14px; font-weight: bold; color: white; }
 .user-meta .score { font-size: 12px; color: #ffd700; }
 
-/* 3. 礼物安全区：建议直播截取这一块 */
-.gift-safe-zone {
-  position: absolute;
-  left: 50%;
-  top: 55%;
-  transform: translate(-50%, -50%);
-  width: 400px;
-  height: 500px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-}
-
-.gift-bubble {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 100%);
-  padding: 8px 20px;
-  border-radius: 40px;
-  border-left: 4px solid #ffd700;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.sender-avatar img { width: 40px; height: 40px; border-radius: 50%; }
-.gift-text { flex: 1; margin-left: 12px; font-size: 16px; }
-.user-name { color: #87ceeb; font-weight: bold; margin-right: 5px; }
-.gift-name { color: #ffd700; font-weight: bold; margin-left: 5px; }
-.gift-count { font-size: 24px; font-style: italic; color: #ff4500; font-weight: 900; text-shadow: 2px 2px 0 #fff; }
-
-/* 4. 礼物列表动画：从下方滑入并弹动 */
-.gift-list-enter-active {
-  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.gift-list-leave-active {
-  transition: all 0.5s ease;
-}
-.gift-list-enter-from { opacity: 0; transform: scale(0.5) translateY(100px); }
-.gift-list-leave-to { opacity: 0; transform: translateX(100px); }
-
-/* 5. 全屏榜单 (Tab) */
+/* TAB 榜单遮罩 */
 .full-rank-overlay {
   position: absolute;
   inset: 0;
@@ -214,12 +171,12 @@ onUnmounted(() => {
 .rank-panel {
   width: 400px;
   background: #1a1a1a;
-  border: 1px solid #333;
   border-radius: 12px;
+  border: 1px solid #333;
   overflow: hidden;
 }
 .panel-header { background: #333; padding: 15px; text-align: center; color: gold; font-weight: bold; }
-.list-item { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #222; }
+.list-item { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #222; color: white; }
 .list-item img { width: 30px; height: 30px; border-radius: 50%; margin: 0 15px; }
 .list-item .name { flex: 1; }
 .list-item .points { color: gold; }

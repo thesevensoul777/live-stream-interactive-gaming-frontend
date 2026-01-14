@@ -53,9 +53,6 @@ import type { CastType } from '@/components/CastTypeBtn/type';
 import { getId } from '@/utils/idUtil';
 import CastItem from './CastItem.vue';
 import { CastMethod, type DyMessage } from '@/core/dycast';
-
-
-import { handleDanmu } from '@/core/actionRequests';
 import { throttle } from '@/utils/loashUtil';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { watch } from 'vue'
@@ -149,7 +146,6 @@ const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
   const list: DyMessage[] = msgs.filter(item => item.method && typeMap.get(item.method));
 
 
-  handleDanmu(list);
 
   // 更新 casts
   if (isClear) casts.value = list;

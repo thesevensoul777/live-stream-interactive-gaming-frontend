@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-console.log('preload loaded');
+console.log('preload loaded111');
 
 
 /* ================= Files And File folder ================= */
@@ -31,6 +31,15 @@ contextBridge.exposeInMainWorld('auth', {
 
 /* ================= Existing Electron API ================= */
 contextBridge.exposeInMainWorld('electronAPI', {
+// 1. 修改为 invoke，确保主窗口知道同步成功
+  syncCurrentPlay: (players) => ipcRenderer.invoke('sync-players-to-main', players),
+
+  // 2. 这里的 on 必须保留，因为 Overlay 窗口是在“被动接收”消息
+  onSyncPlayers: (callback) => {
+    ipcRenderer.removeAllListeners('update-players-to-overlay');
+    ipcRenderer.on('update-players-to-overlay', (_event, value) => callback(value));
+  },
+  
   /**
    * Send a command to the main process
    */
@@ -101,4 +110,21 @@ contextBridge.exposeInMainWorld('newWindow', {
    * 关闭特效/绿幕窗口
    */
   closeOverlay: () => ipcRenderer.send('close-overlay'),
+// Vue 调用这个方法来开启“监听模式”
+  listening: (onGiftReceived, onLikeReceived) => {
+    
+    // 监听礼物
+    const giftSub = (_event, data) => onGiftReceived(data);
+    ipcRenderer.on('broadcast-gift', giftSub);
+
+    // 监听点赞
+    const likeSub = (_event, data) => onLikeReceived(data);
+    ipcRenderer.on('broadcast-like', likeSub);
+
+    // 返回清理函数，Vue 卸载时调用
+    return () => {
+      ipcRenderer.removeListener('broadcast-gift', giftSub);
+      ipcRenderer.removeListener('broadcast-like', likeSub);
+    };
+  }
 });

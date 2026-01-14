@@ -274,8 +274,6 @@ const handleMessages = function (msgs: DyMessage[]) {
     }
   } catch (err) {}
   allCasts.push(...newCasts);
-
-
  handleDanmu(newCasts);
 
   appendCasts(allCasts, mainCasts, otherCasts)

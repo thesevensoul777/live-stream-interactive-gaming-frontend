@@ -4,10 +4,10 @@ import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike} from './war
 import {WindowManager} from './windowManager.js'
 
   const bufferService = new BufferService()
-    const windowManager = new WindowManager()
+  const windowManager = new WindowManager()
 let overlayWin = null; // 声明特效窗口变量
 
-
+console.log("ipc11")
 
 export function registerIpcHandlers(win) {
   ipcMain.handle('add-command', async (event, payload) => {
@@ -25,26 +25,56 @@ export function registerIpcHandlers(win) {
   });
 
 ipcMain.handle('add-gift', async (_, payload) => {
+  console.log(">>> [IPC] 收到 add-gift 请求"); // 放在最前面
   try {
-    const res = await saveGift(payload);
+    // 💡 建议：先转发给 Overlay 显示，再写文件，防止写文件慢导致特效延迟
+    if (windowManager.overlayWin) {
+      windowManager.overlayWin.webContents.send('broadcast-gift', payload);
+    }
+
+    const res = await saveGift(payload); 
+    console.log(">>> [IPC] saveGift 执行完毕");
     return res;
   } catch (err) {
-    console.error('[ipc add-gift failed]', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    console.error(">>> [IPC] 发生错误:", err);
+    return { ok: false };
   }
 });
 
 
 ipcMain.handle('add-like', async (_, payload) => {
   try {
+        // 转发点赞
+    if (windowManager.overlayWin) {
+      windowManager.overlayWin.webContents.send('broadcast-like', payload);
+    }
     const res = await saveLike(payload);
+
+    console.log(">>> [IPC] saveLike 执行完毕");
     return res;
   } catch (err) {
     console.error('[ipc add-like failed]', err);
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-});
 
+});
+// 使用 handle 对应渲染进程的 invoke
+ipcMain.handle('sync-players-to-main', async (event, players) => {
+
+// 💡 关键修改：从 windowManager 实例中获取窗口
+  const targetWin = windowManager.overlayWin;
+
+  console.log("尝试同步玩家列表:", players, "窗口状态:", !!targetWin);
+  // 转发给 Overlay 窗口
+  // 注意：这里的 overlayWin 是你在创建窗口时保存的变量名
+if (targetWin && !targetWin.isDestroyed()) {
+
+   console.log("尝试同步玩家列表成功");
+    targetWin.webContents.send('update-players-to-overlay', players);
+    return { status: 'ok' };
+  }
+  return { status: 'no_overlay' };
+});
 
 
   ipcMain.on('maximize-window', () => {
@@ -176,18 +206,24 @@ ipcMain.on('buffer:sendPlayerDelta', async () => {
 
 
 
-// --- 新增：监听渲染层发出的指令 ---
+// --- 开启特效窗口 ---
 ipcMain.on('open-overlay', () => {
-  if (!overlayWin) {
+  // 使用 windowManager 内部的属性判断
+  if (!windowManager.overlayWin || windowManager.overlayWin.isDestroyed()) {
     windowManager.createOverlayWindow();
     console.log('特效窗口已开启');
+  } else {
+    windowManager.overlayWin.focus();
   }
 });
 
+// --- 关闭特效窗口 ---
 ipcMain.on('close-overlay', () => {
-  if (overlayWin) {
-    overlayWin.close();
+  if (windowManager.overlayWin) {
+    windowManager.overlayWin.close();
+    // 💡 注意：你应该在 WindowManager 类里面的 closed 监听里把 this.overlayWin 设为 null
   }
 });
 }
+
 
