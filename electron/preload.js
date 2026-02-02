@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-console.log('preload loaded111');
+console.log('preload1111');
 
 
 /* ================= Files And File folder ================= */
@@ -96,6 +96,10 @@ contextBridge.exposeInMainWorld('buffer', {
    * Get Authorization token for BufferService
    */
   getAuthToken: () => authToken
+});
+
+contextBridge.exposeInMainWorld('gameAPI', {
+  launchWar3: (gamePath) => ipcRenderer.invoke('launch-war3', gamePath),
 });
 
 

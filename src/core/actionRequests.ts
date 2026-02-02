@@ -19,12 +19,43 @@ const COMMAND_MAP: Record<string, string> = {
   '1': 'SELECT_1',
   '2': 'SELECT_2',
   '上': 'MOVE_UP',
+  '中': 'MOVE_MID',
   '下': 'MOVE_DOWN',
   '666': 'LOTTERY',
-  '999': 'CHALLENGE',
   '查询': 'QUERY',
   '换职业':'CHANGE_CAREER',
-  '回':'BACK '
+  '回':'BACK',
+  '换英雄':'CHANGE_HERO',
+};
+
+/**
+ * 礼物功能映射表 (基于2026最新数据)
+ * 键 (Key): 礼物 ID
+ * 值 (Value): 游戏逻辑指令
+ */
+const GIFT_MAP: Record<string, string> = {
+  // --- 1. 基础小礼物 (1-9 抖币) ---
+  '463':   'ADD_INT',            // 小心心: 智力+1/0.1护甲
+  '164':   'ADD_STR',            // 抖音: 力量+1/10血量
+  '3992':  'ADD_AGI',            // 人气票: 敏捷+1/+攻击力
+  '2002':  'SPAWN_MELEE',        // 大啤酒: 近战单位
+  '3481':  'SPAWN_RANGE',        // 你最好看: 远程单位
+  '165':   'SPAWN_MAGIC',        // 棒棒糖: 魔法/控制单位
+  '2006':  'SPAWN_ELITE',        // 鲜花: 高级兵种
+  '3621':  'CHANGE_HERO',        // 爱你呦: 切换英雄化身 (ChangeHero)
+  '3620':  'CHANGE_SUMMONER',     // 送你花花: 切换召唤师类型 
+  '2114':  'ADD_GOLD_3000',      // 奇幻礼花筒: 金币 3000
+  '781':  'ADD_LUMBER_3000',    // 比心: 木材 3000 
+
+  // --- 2. 中大型礼物 (战局逆转) ---
+  '685':   'TEAM_BUFF_SMALL',    // 粉丝团灯牌: 全体+5全属性, 召唤师+200经验
+  '3780':  'TEAM_BUFF_LARGE',    // 比心兔兔: 所有召唤单位+50全属性
+  '3531':  'SUMMON_EPIC_HERO',   // 私人飞机: 史诗级中立英雄 (持续100s)
+
+  // --- 3. 空中打击 (特定召唤) ---
+  '5564':  'SUMMON_HIPPOGRYPH',  // 闪耀星辰: 10x 角鹰兽
+  '5503':  'SUMMON_WIND_RIDER',  // 黄桃罐头: 10x 风骑士
+  '3447':  'SUMMON_FROST_WYRM',  // 亲吻: 10x 冰霜巨龙
 };
 
 
@@ -93,15 +124,24 @@ if (msg.method !== CastMethod.CHAT) return;
 
 
 export function handleGift(msg: DyMessage) {
-    const userName = msg.user?.name;
-    if (!userName) return;
 
-   console.log("handleGift",msg)
+   const userName = msg.user?.name;
+    const content = msg.gift?.id;
+    const count= msg.gift?.count;
+    console.log("msg",msg)
+    if (!userName || !content) return;
+
+    
+    const action = GIFT_MAP[content];
+    if (!action) return;
+
+
     const Msg: GifddDTO = {
       realId: msg.user?.realId,
       user: userName,
       time: msg.time,
-      giftId: msg.gift?.id,
+      command: action,
+      count:count
     };
     (window as any).electronAPI
       .addGift(Msg)

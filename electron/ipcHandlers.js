@@ -1,13 +1,15 @@
 import { app, BrowserWindow, ipcMain, net,dialog  } from 'electron'
 import { BufferService } from './services/BufferService.js';
-import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike} from './war3.js';
+import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike ,launchWarcraft} from './war3.js';
 import {WindowManager} from './windowManager.js'
+import path from 'path';
+
 
   const bufferService = new BufferService()
   const windowManager = new WindowManager()
 let overlayWin = null; // 声明特效窗口变量
 
-console.log("ipc11")
+console.log("ipc21122211")
 
 export function registerIpcHandlers(win) {
   ipcMain.handle('add-command', async (event, payload) => {
@@ -184,10 +186,12 @@ ipcMain.handle('select-folder', async (_event) => {
     properties: ['openDirectory'],
   });
 
-  if (result.canceled || result.filePaths.length === 0) return null;
-   getWarcraftPath(result.filePaths[0])
-
-  return result.filePaths[0]; // 返回选择的文件夹路径
+if (result.filePaths.length > 0) {
+    const path = result.filePaths[0];
+    bufferService.setGamePath(path); // 存入 service
+    return path;
+  }
+  return null;
 });
 
 
@@ -224,6 +228,29 @@ ipcMain.on('close-overlay', () => {
     // 💡 注意：你应该在 WindowManager 类里面的 closed 监听里把 this.overlayWin 设为 null
   }
 });
+
+
+
+
+ipcMain.handle('launch-war3', async (event, gamePath) => {
+    try {
+        // 逻辑置顶：优先参数，次选 Service 缓存
+        const finalPath = gamePath || bufferService.getGamePath();
+
+        if (!finalPath) {
+            throw new Error("未配置游戏路径");
+        }
+
+        // 调用刚才在 war3.js 里写的业务方法
+        return await launchWarcraft(finalPath);
+    } catch (err) {
+        return { ok: false, error: err.message };
+    }
+});
+
+
+
+
 }
 
 

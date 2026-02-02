@@ -37,8 +37,15 @@
     >
       {{ connectStatus==1 ? '监听中' : '启动监听' }}
     </button>
+    <button 
+  class="btn-launch" 
+  :disabled="!path" 
+  @click="launchGame"
+>
+  启动游戏
+</button>
 
-    <button @click="stop">断开</button>
+    <!-- <button @click="stop">断开</button> -->
   </div>
 </div>
     <div class="row">
@@ -151,6 +158,20 @@ function toggleListen(): void {
 
 }
 
+// 调用 actionRequests 中的注入方法或直接触发 IPC
+async function launchGame() {
+  if (!path.value) {
+    alert('请先选择游戏文件夹');
+    return;
+  }
+  // 这里可以调用你已经导入的 injectWar3，或者直接通过 API 启动
+  console.log('正在启动魔兽并准备注入...');
+  // 假设你在 preload 中暴露了 gameAPI
+  const success = await (window as any).gameAPI.launchWar3(path.value);
+  if (success) {
+    console.log('游戏启动命令已发送');
+  }
+}
 
 
 function connectLive(): void {

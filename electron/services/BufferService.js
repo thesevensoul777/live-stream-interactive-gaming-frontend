@@ -7,6 +7,10 @@ export class BufferService {
     this.giftFlushing = false
     this.giftTimer = null
     this.authToken = null
+
+    /* ================= game config ================= */
+    this.gamePath = '' // 新增：用于存储魔兽争霸路径
+
     /* ================= lifecycle ================= */
     this.initGiftTimer()
     this.initShutdownHook()
@@ -19,6 +23,24 @@ export class BufferService {
 
     setAuthToken(token) {
     this.authToken = token;
+  }
+
+
+  /**
+   * 设置魔兽争霸游戏路径
+   * @param {string} path 
+   */
+  setGamePath(path) {
+    this.gamePath = path
+    console.log('BufferService: 游戏路径已更新为 ->', path)
+  }
+
+  /**
+   * 获取当前存储的游戏路径
+   * @returns {string}
+   */
+  getGamePath() {
+    return this.gamePath
   }
 
   addGift(gift) {
@@ -40,7 +62,6 @@ export class BufferService {
   }
 
   async flushGift() {
-    console.log(this.authToken,"this.authToken ")
     if (this.giftFlushing) return
     if (!this.giftBuffer.length) return
 
@@ -134,5 +155,3 @@ if (!res.ok) {
     }
   }
 }
-
-export const bufferService = new BufferService()

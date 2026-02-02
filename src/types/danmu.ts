@@ -11,8 +11,10 @@ export interface GifddDTO {
   realId?: string;
   user: string;
   time?: number;
+   command?: string;
   giftId?: string;
   avatar?: string;
+  count?:string|number|undefined;
 }
 
 export interface LikeDTO {
@@ -20,6 +22,7 @@ export interface LikeDTO {
   user: string;
   time?: number;
   likeCount?: string;
+  command?: string;
   avatar?: string;
 }
 

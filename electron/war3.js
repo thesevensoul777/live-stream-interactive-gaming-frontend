@@ -3,6 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Tools } from './until/tools.js';
+import { spawn } from 'child_process';
+import fsExtra from 'fs-extra'; // 建议使用 fs-extra 处理拷贝，或者用原生 fs.copyFileSync
+
+
+// 变量声明置顶
+// app.isPackaged 判断是“开发调试”还是“已经安装”
+const isDev = !app.isPackaged;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +74,8 @@ async function writeToWarcraftQueue(filePath, dataString) {
     }
 }
 
+
+
 /**
  * 等待魔兽处理完文件
  */
@@ -94,8 +103,7 @@ export async function saveCommand(payload) {
     try {
         const fullText = `|realId=${tool.encodeValue(payload.msg.realId)}|` +
                          `*user=${tool.encodeValue(payload.msg.user)}|` +
-                         `*command=${tool.encodeValue(payload.action)}|` +
-                         `*time=${payload.msg.time}|`;
+                         `*command=${tool.encodeValue(payload.action)}`;
         
         await writeToWarcraftQueue(CommandPath, fullText);
         return { ok: true };
@@ -110,12 +118,11 @@ export async function saveGift(msg) {
         const encodedUser = tool.encodeValue(msg.user);
         const encodedId = tool.encodeValue(msg.realId);
         
-        const fullText = `|type=GIFT|` +
-                         `|realId=${encodedId}|` +
+        const fullText =  `|realId=${encodedId}|` +
                          `*user=${encodedUser || encodedId}|` +
-                         `*giftId=${msg.giftId}|` +
-                         `*time=${msg.time}|`;
-
+                         `*command=${msg.command}|` +
+                         `*count=${msg.count}`;
+      console.log("fullText",fullText,"msg.count",msg.count)
         await writeToWarcraftQueue(GiftPath, fullText);
         return { ok: true };
     } catch (err) {
@@ -126,11 +133,10 @@ export async function saveGift(msg) {
 
 export async function saveLike(msg) {
     try {
-        const fullText = `|type=LIKE|` +
-                         `|realId=${tool.encodeValue(msg.realId)}|` +
+        const fullText =  `|realId=${tool.encodeValue(msg.realId)}|` +
                          `*user=${tool.encodeValue(msg.user)}|` +
-                         `*likeCount=${msg.likeCount}|` +
-                         `*time=${msg.time}|`;
+                         `*command=LIKE|` +
+                         `*likeCount=${msg.likeCount}` ;
 
         await writeToWarcraftQueue(LikePath, fullText);
         return { ok: true };
@@ -139,6 +145,59 @@ export async function saveLike(msg) {
         return { ok: false };
     }
 }
+
+// 动态获取插件目录
+const getPluginDir = () => {
+    if (isDev) {
+        // 开发环境：在源码的上级目录找
+        return path.join(app.getAppPath(), 'plugins');
+    } else {
+        // 生产环境：在安装目录的 resources 文件夹找
+        // process.resourcesPath 专门指向那个 resources 目录
+        return path.join(process.resourcesPath, 'plugins');
+    }
+};
+
+/**
+ * 启动魔兽争霸并注入插件
+ * @param {string} gamePath 游戏根目录路径
+ */
+export async function launchWarcraft(gamePath) {
+    try {
+        const finalPluginDir = getPluginDir();
+    const pluginSrc = path.join(finalPluginDir, 'version.dll');np
+        const versionDllTarget = path.join(gamePath, 'version.dll');
+        const exePath = path.join(gamePath, 'war3.exe');
+
+        console.log(`[Launch] 准备启动。路径: ${gamePath}`);
+
+        // 2. 注入逻辑：拷贝 version.dll
+        if (fs.existsSync(pluginSrc)) {
+            // 使用同步拷贝确保启动前文件已到位
+            fs.copyFileSync(pluginSrc, versionDllTarget);
+            console.log('[Launch] version.dll 注入成功');
+        } else {
+            console.warn('[Launch] 未找到插件源文件，将尝试原版启动:', pluginSrc);
+        }
+
+        // 3. 执行启动
+        // 使用 detached: true 让魔兽在 Electron 关闭后继续运行
+        const child = spawn(exePath, ['-window'], {
+            cwd: gamePath,
+            detached: true,
+            stdio: 'ignore'
+        });
+
+        // 防止父进程等待子进程
+        child.unref();
+        
+        return { ok: true };
+    } catch (err) {
+        console.error('[Launch] 启动失败:', err);
+        throw err;
+    }
+}
+
 
 // --- 锁机制 ---
 async function acquireFileLock(filePath) {
