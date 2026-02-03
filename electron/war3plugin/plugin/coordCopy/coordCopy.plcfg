@@ -1,0 +1,6 @@
+[Info]
+PluginName = 雪月坐标复制插件
+[Load]
+Enable = 0
+Loader = coordCopy.lua
+Dll    = coordCopy.dll

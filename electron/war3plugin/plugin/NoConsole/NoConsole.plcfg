@@ -1,0 +1,6 @@
+[Info]
+PluginName = 雪月关闭控制台
+[Load]
+Enable = 1
+Loader = NoConsole.lua
+Dll    = NoConsole.dll

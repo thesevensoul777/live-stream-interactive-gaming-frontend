@@ -1,0 +1,5 @@
+struct MyStruct extends array
+    private static method onInit takes nothing returns nothing
+        
+    endmethod
+endstruct

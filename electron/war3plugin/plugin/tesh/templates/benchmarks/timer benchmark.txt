@@ -1,0 +1,13 @@
+scope MyBenchmarkScope initializer onInit
+    globals
+        private constant real PERIOD = 0.01
+    endglobals
+
+    private function BenchmarkFunction takes nothing returns nothing
+        
+    endfunction
+
+    private function onInit takes nothing returns nothing
+        call TimerStart(CreateTimer(), PERIOD, true, function BenchmarkFunction)
+    endfunction
+endscope

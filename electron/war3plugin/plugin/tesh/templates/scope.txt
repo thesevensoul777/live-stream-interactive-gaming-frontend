@@ -1,0 +1,5 @@
+scope MyScope initializer onInit
+    private function onInit takes nothing returns nothing
+        
+    endfunction
+endscope

@@ -5,12 +5,16 @@
   "type": "module",
   "main": "electron/main.js",
   "build": {
-    "extraResources": [
-    {
-      "from": "plugins",
-      "to": "plugins"
-    }
-  ],
+   "extraResources": [
+  {
+    "from": "electron/war3plugin",
+    "to": "war3plugin"
+  },
+  {
+    "from": "electron/bin",
+    "to": "bin" 
+  }
+],
     "appId": "com.example.myapp",
     "productName": "MyElectronApp",
     "files": [

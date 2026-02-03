@@ -162,43 +162,129 @@ const getPluginDir = () => {
  * 启动魔兽争霸并注入插件
  * @param {string} gamePath 游戏根目录路径
  */
+// export async function launchWarcraft(gamePath) {
+//     // --- 变量声明严格置顶 ---
+//     const kkweBin = `D:\\SnowNightWE\\bin`; // 你的 DLL 来源目录
+//     const war3Exe = path.join(gamePath, 'war3.exe');
+    
+//     // 必须要拷贝的最小集合（复刻雪夜环境）
+//     const essentialDlls = [
+//         'ydbase.dll',
+//         'yd_loader.dll',
+//         'yd_virtual_mpq.dll',
+//         'yd_lua_engine.dll',
+//         'yd_jass_api.dll',
+//         'yd_size_limit.dll', // 解决大地图进不去的问题
+//         'luacore.dll',
+//         'SlkLib.dll'
+//     ];
+
+//     try {
+//         console.log('[Inject] 正在复刻雪夜 WE 运行环境...');
+
+//         // 1. 批量拷贝 DLL 到魔兽根目录
+//         essentialDlls.forEach(dll => {
+//             const src = path.join(kkweBin, dll);
+//             const dest = path.join(gamePath, dll);
+//             if (fs.existsSync(src)) {
+//                 fs.copyFileSync(src, dest);
+//             }
+//         });
+
+//         // 2. 关键：寻找“点火开关”
+//         // 将 yd_loader.dll 复制并改名为 version.dll
+//         // 魔兽启动会自动运行 version.dll，而 yd_loader 会负责拉起其他 yd_*.dll
+//         const loaderSrc = path.join(kkweBin, 'yd_loader.dll');
+//         const loaderDest = path.join(gamePath, 'version.dll');
+//         if (fs.existsSync(loaderSrc)) {
+//             fs.copyFileSync(loaderSrc, loaderDest);
+//         }
+
+
+
+//         // 4. 执行启动
+//         const child = spawn(war3Exe, ['-window'], {
+//             cwd: gamePath,
+//             detached: true,
+//             stdio: 'ignore'
+//         });
+
+//         child.unref();
+//         console.log('[Launch] 环境已就绪，魔兽启动中...');
+//         return { ok: true };
+
+//     } catch (err) {
+//         console.error('[Error] 复刻失败:', err);
+//         return { ok: false, error: err.message };
+//     }
+// }
+
+
+
+/**
+ * 方案二：专业级伪装启动 (整合版)
+ */
+/**
+ * 方案二：专业级伪装启动 (修正版)
+ */
+/**
+ * 方案二：专业级启动 (插件全激活版)
+ */
+/**
+ * 方案三：本地工程插件全量注入版
+ */
+/**
+ * 启动魔兽争霸并注入插件
+ * @param {string} gamePath 用户选择的魔兽 Exe 所在路径
+ */
+// --- [变量声明置顶] ---
+
 export async function launchWarcraft(gamePath) {
+    // --- 变量声明置顶 ---
+    const isDev = !app.isPackaged;
+    const resourceBase = isDev ? app.getAppPath() : process.resourcesPath;
+
+    // 1. 注入器路径：开发环境下在 electron/bin，生产环境下在 resources/bin
+    const injectorExe = path.join(resourceBase, 'bin', 'War3Injector.exe');
+
+    // 2. 魔兽路径处理：gamePath 传进来的是目录，我们需要指向 Exe
+    const war3Exe = path.join(gamePath, 'war3.exe');
+    const war3Dir = gamePath; // 工作目录就是文件夹本身
+
+    // 3. 插件根目录 (-kkwe 参数)：就在 resourceBase 下的 war3plugin
+    const kkweRoot = path.join(resourceBase, 'war3plugin');
+
+    // 4. 引导 DLL 路径
+    const loaderDll = path.join(kkweRoot, 'plugin', 'warcraft3', 'yd_loader.dll');
+
+    // 封装参数
+    const args = [war3Exe, war3Dir, kkweRoot, loaderDll];
+
+    console.log('[Launch] 路径自动匹配成功：');
+    console.log('-> Injector:', injectorExe);
+    console.log('-> War3Exe:', war3Exe);
+    console.log('-> KKWE_ROOT:', kkweRoot);
+
+    // 执行逻辑
     try {
-        const finalPluginDir = getPluginDir();
-    const pluginSrc = path.join(finalPluginDir, 'version.dll');np
-        const versionDllTarget = path.join(gamePath, 'version.dll');
-        const exePath = path.join(gamePath, 'war3.exe');
+        // 校验文件是否存在，防止 C# 报错闪退
+        if (!fs.existsSync(injectorExe)) throw new Error(`找不到注入器: ${injectorExe}`);
+        if (!fs.existsSync(war3Exe)) throw new Error(`找不到魔兽程序: ${war3Exe}`);
 
-        console.log(`[Launch] 准备启动。路径: ${gamePath}`);
-
-        // 2. 注入逻辑：拷贝 version.dll
-        if (fs.existsSync(pluginSrc)) {
-            // 使用同步拷贝确保启动前文件已到位
-            fs.copyFileSync(pluginSrc, versionDllTarget);
-            console.log('[Launch] version.dll 注入成功');
-        } else {
-            console.warn('[Launch] 未找到插件源文件，将尝试原版启动:', pluginSrc);
-        }
-
-        // 3. 执行启动
-        // 使用 detached: true 让魔兽在 Electron 关闭后继续运行
-        const child = spawn(exePath, ['-window'], {
-            cwd: gamePath,
-            detached: true,
-            stdio: 'ignore'
+        const child = spawn(injectorExe, args, {
+            cwd: path.dirname(injectorExe),
+            windowsHide: false,
+            shell: false
         });
 
-        // 防止父进程等待子进程
-        child.unref();
-        
-        return { ok: true };
+        child.stdout.on('data', (data) => console.log(`[C# Output]: ${data}`));
+        child.stderr.on('data', (data) => console.error(`[C# Error]: ${data}`));
+        child.on('close', (code) => console.log(`[C# Process] 退出码: ${code}`));
+
     } catch (err) {
-        console.error('[Launch] 启动失败:', err);
-        throw err;
+        console.error('[Launch Error]:', err.message);
     }
 }
-
-
 // --- 锁机制 ---
 async function acquireFileLock(filePath) {
     while (fileWriteLocks.get(filePath)) {

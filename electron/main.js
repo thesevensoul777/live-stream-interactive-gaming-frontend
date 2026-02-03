@@ -12,8 +12,10 @@ const __dirname = path.dirname(__filename);
 
 // 1. 实例化
 const networkService = new NetworkService();
-const windowManager = new WindowManager(__dirname);
 const bufferService = new BufferService();
+const windowManager = new WindowManager(__dirname);
+
+
 
 app.whenReady().then(async () => {
   // 2. 网络拦截准备

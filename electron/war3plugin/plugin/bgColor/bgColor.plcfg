@@ -1,0 +1,6 @@
+[Info]
+PluginName = 雪月颜色字体插件
+[Load]
+Enable = 1
+Loader = bgColor.lua
+Dll    = bgColor.dll

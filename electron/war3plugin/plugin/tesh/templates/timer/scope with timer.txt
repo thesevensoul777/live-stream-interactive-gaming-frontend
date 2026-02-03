@@ -1,0 +1,9 @@
+scope MyScope initializer onInit
+    private function callback takes nothing returns nothing
+        
+    endfunction
+
+    private function onInit takes nothing returns nothing
+        call TimerStart(CreateTimer(), 0.0, false, function callback)
+    endfunction
+endscope

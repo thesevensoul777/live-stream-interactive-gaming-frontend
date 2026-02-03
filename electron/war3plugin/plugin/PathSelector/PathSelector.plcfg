@@ -1,0 +1,6 @@
+[Info]
+PluginName = 雪月虚拟MPQ路径选择器
+[Load]
+Enable = 1
+Loader = PathSelector.lua
+Dll    = PathSelector.dll

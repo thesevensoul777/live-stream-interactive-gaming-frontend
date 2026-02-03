@@ -1,0 +1,169 @@
+require "localization"
+local ffi = require "ffi"
+local u2w = require 'ffi.unicode'.u2w
+local L = function ( u )
+	return (u2w( u ))
+end
+
+local xt = require 'xgthunk'
+
+local path_plug = debug.getinfo(1).source:match("@?(.*)[/\\]")
+local path_plugs = path_plug:match("^(.*)[/\\]")
+
+local locPath = package.path
+package.path =  path_plug .. '\\?.lua;' .. package.path
+package.path =  path_plugs .. '\\?.lua;' .. package.path
+package.path =  path_plugs .. '\\Lua\\?.lua;' .. package.path
+
+require 'ffi.Core'
+require 'ffi.window'
+require 'ffi.hMenu'
+local timer = require 'ffi.timer'
+
+package.path = locPath
+
+local loader = {}
+
+
+local mt = {}
+
+local MIIM_TYPE = 16
+local MFT_STRING = 0
+local MIIM_SUBMENU = 4
+local MIIM_ID = 2
+local MIIM_STATE = 1
+
+local MFS_DEFAULT = 0x1000
+local MFS_DISABLED = 0x200
+local MFS_GRAYED = 0x10
+local MFS_CHECKED = 0x8
+
+local MF_BYCOMMAND = 0x400
+local MF_BYPOSITION = 0x400
+
+local XGPLUGIN_MENU_ID = 3000
+local XGPLUGIN_MENU_TITLE, XGPLUGIN_MENU_TITLE_LENGTH = u2w'雪月插件'
+
+function mt:getXGPmenu( hwnd )
+	local hMenu = ffi.C.GetMenu( hwnd:hwnd() )
+
+	local lpmi = ffi.new("MENUITEMINFOW", nil)
+	lpmi.cbSize = ffi.sizeof(lpmi)
+	lpmi.fMask = MFT_STRING | MIIM_TYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU
+	lpmi.fType = MFT_STRING
+	lpmi.fState = MFS_DEFAULT
+	lpmi.wID = XGPLUGIN_MENU_ID
+	lpmi.hSubMenu = hMenu
+	lpmi.dwTypeData = ffi.new("wchar_t[?]", 260)
+	lpmi.cch = 260
+
+	if ffi.C.GetMenuItemInfoW( hMenu, XGPLUGIN_MENU_ID, 0, lpmi ) == false then
+		lpmi.dwTypeData = ffi.new("wchar_t[?]", XGPLUGIN_MENU_TITLE)
+		lpmi.cch = XGPLUGIN_MENU_TITLE_LENGTH + 1
+
+		lpmi.hSubMenu = ffi.C.CreatePopupMenu ()
+		if ffi.C.InsertMenuItemW( hMenu, XGPLUGIN_MENU_ID, 0, lpmi ) == false then
+			return 0
+		end
+	end
+
+	return lpmi.hSubMenu
+end
+
+local MENU_ID_COORDCOPY = 30300
+local MENU_TITLE_COORDCOPY, MENU_TITLE_COORDCOPY_LENGTH = u2w'坐标复制'
+function mt:addMenu( hMenu )
+	local lpmi = ffi.new("MENUITEMINFOW", nil)
+	lpmi.cbSize = ffi.sizeof(lpmi)
+	lpmi.fMask = MFT_STRING | MIIM_TYPE | MIIM_ID | MIIM_STATE
+	lpmi.fType = MFT_STRING
+	lpmi.fState = MFS_DEFAULT
+	lpmi.hSubMenu = hMenu
+
+	lpmi.wID = MENU_ID_COORDCOPY
+
+	lpmi.dwTypeData = MENU_TITLE_COORDCOPY
+	lpmi.cch = MENU_TITLE_COORDCOPY_LENGTH + 1
+
+	return ffi.C.InsertMenuItemW( hMenu, MENU_ID_COORDCOPY, 0, lpmi )
+end
+
+---初始化插件内容
+function mt:init( hwnd )
+	log.info('coordCopy - init')
+
+	timer:setHwnd( hwnd )
+	local t = timer:loop( 3.00, function (t)
+		log.debug( '--timer--' )
+	end)
+	log.trace('coordCopy - timer', t)
+
+	local xgp = self:getXGPmenu(hwnd)
+	if xgp == 0 then
+		return
+	end
+
+	if self:addMenu( xgp ) == false then
+		return
+	end
+
+	return true
+end
+
+function mt:load()
+	local wstr_className = L'Warcraft III'
+	local childWindow = ffi.new('HWND')
+	local curPID = ffi.C.GetCurrentProcessId()
+
+	local retPID = ffi.new('int[1]', 0)
+
+	local max_try = 20
+
+	while true do
+		max_try = max_try - 1
+		if max_try == 0 then
+			log.error('coordCopy - failed to find war3Editor window[max_try == 0]')
+			break
+		end
+
+
+		childWindow = ffi.C.FindWindowExW(ffi.NULL, ffi.NULL, wstr_className, ffi.NULL)
+
+		if childWindow == ffi.NULL then
+			log.error('coordCopy - failed to find war3Editor window[childWindow == NULL]')
+			break
+		end
+
+		local thread = ffi.C.GetWindowThreadProcessId( childWindow, retPID )
+		if retPID[0] == curPID then
+			return mt:init( ffi.cast('int', childWindow) )
+		end
+
+	end
+	
+end
+
+
+
+local isLoaded = false
+loader.load = function(path)
+	if isLoaded then return end
+	isLoaded = true
+
+	if not xt then
+		return false
+	end
+	
+
+	--mt:load()
+
+	return false
+end
+
+loader.unload = function()
+
+
+
+end
+
+return loader

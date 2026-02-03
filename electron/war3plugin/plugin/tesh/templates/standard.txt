@@ -1,0 +1,13 @@
+library MyLibrary
+    private keyword INITS
+    
+    struct MyStruct extends array
+        implement INITS
+    endstruct
+    
+    private module INITS
+        private static method onInit takes nothing returns nothing
+            
+        endmethod
+    endmodule
+endlibrary

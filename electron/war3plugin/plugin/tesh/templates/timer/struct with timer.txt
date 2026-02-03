@@ -1,0 +1,9 @@
+struct MyStruct extends array
+    private static method callback takes nothing returns nothing
+        
+    endmethod
+
+    private static method onInit takes nothing returns nothing
+        call TimerStart(CreateTimer(), 0.0, false, function thistype.callback)
+    endmethod
+endstruct
