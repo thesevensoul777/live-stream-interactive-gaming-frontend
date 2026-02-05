@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app,screen } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -258,78 +258,148 @@ export async function launchWarcraft(gamePath) {
     // --- 1. 变量声明严格置顶 ---
     const isDev = !app.isPackaged;
     const resourceBase = isDev ? app.getAppPath() : process.resourcesPath;
-    
-    // 路径对齐
+    const squareSize = 1300; 
+    const waitTime = 100; 
+// 获取屏幕分辨率
+
+// 获取屏幕分辨率
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
+
+
     const injectorExe = path.join(resourceBase, 'bin', 'War3Injector.exe');
     const war3Exe = path.join(gamePath, 'war3.exe');
     const war3Dir = gamePath;
     const copySourceDir = path.join(resourceBase, 'war3plugin', 'copyDLL');
     const kkweRoot = path.join(resourceBase, 'war3plugin');
     const loaderDll = path.join(kkweRoot, 'plugin', 'warcraft3', 'yd_loader.dll');
+
+    // 动态计算：宽度 70%，高度 99%
+    const targetWidth = Math.floor(screenW * 0.8);
+    const targetHeight = Math.floor(screenH * 1);
+    const posX = Math.floor((screenW - targetWidth) / 2);
+    const posY = Math.floor((screenH - targetHeight) / 2);
     
-    // 需要搬运的 DLL 列表
     const dllFiles = [
         'd3d8.dll', 'scriptrunner.dll', 'SlkLib.dll', 'luacore.dll', 
         'yd_size_limit.dll', 'yd_jass_api.dll', 'ydbase.dll', 
         'yd_virtual_mpq.dll', 'yd_lua_engine.dll', 'yd_loader.dll'
     ];
+
+    
     const args = [war3Exe, war3Dir, kkweRoot, loaderDll];
 
-    console.log('[Prepare] 检查并准备环境...');
+    console.log('[Prepare] 11环境准备中...');
 
     try {
-        // --- 2. 预检与拷贝 ---
-        if (!fs.existsSync(copySourceDir)) throw new Error(`找不到 copyDLL 目录: ${copySourceDir}`);
-        
+        // --- 2. DLL 拷贝 ---
+        if (!fs.existsSync(copySourceDir)) throw new Error(`找不到 copyDLL 目录`);
         dllFiles.forEach(file => {
             const src = path.join(copySourceDir, file);
             const dest = path.join(gamePath, file);
-            if (fs.existsSync(src)) {
-                fs.copyFileSync(src, dest);
-            }
+            if (fs.existsSync(src)) fs.copyFileSync(src, dest);
         });
 
-        // --- 3. 执行注入器 ---
+        // --- 3. 注入器启动 ---
         const child = spawn(injectorExe, args, {
             cwd: path.dirname(injectorExe),
             windowsHide: false
         });
 
-        child.stdout.on('data', (data) => console.log(`[C# Out]: ${data.toString().trim()}`));
-        child.stderr.on('data', (data) => console.error(`[C# Err]: ${data.toString().trim()}`));
-
         child.on('close', (code) => {
-            console.log(`[C# Exit]: ${code}`);
-            
-            // --- 4. 轮询检测魔兽进程 ---
-            const checkTimer = setInterval(() => {
-                // 使用内部声明防止作用域问题
-                exec('tasklist /NH /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
-                    if (err) {
-                        clearInterval(checkTimer);
+            console.log(`[C# Exit]: 注入完成，代码: ${code}。倒计时 ${waitTime/1000}s...`);
+
+            // --- 4. 20秒后执行拉伸 (改进版脚本) ---
+            setTimeout(() => {
+                console.log('[Action] 尝试定位魔兽窗口并调整尺寸...');
+                
+                // 改用 Add-Type 的简单字符串方式，彻底避开 Here-String 的换行坑
+                const csharpCode = `
+                    using System; 
+                    using System.Runtime.InteropServices; 
+                    public class WinApi { 
+                        [DllImport(\\"user32.dll\\")] public static extern IntPtr FindWindow(string lp, string lp2); 
+                        [DllImport(\\"user32.dll\\")] public static extern bool SetWindowPos(IntPtr h, IntPtr ha, int x, int y, int cx, int cy, uint f); 
+                    }
+                `.replace(/\s+/g, ' ');
+
+                const psCommand = `
+                    $code = '${csharpCode}';
+                    if (-not ([System.Management.Automation.PSTypeName]'WinApi').Type) {
+                        Add-Type -TypeDefinition $code
+                    }
+                    $hwnd = [WinApi]::FindWindow('Warcraft III', $null);
+                    if ($hwnd -eq [IntPtr]::Zero) {
+                        $proc = Get-Process -Name 'war3' -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowHandle -ne 0};
+                        if ($proc) { $hwnd = $proc.MainWindowHandle }
+                    }
+                    if ($hwnd -ne [IntPtr]::Zero) {
+                        [WinApi]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, ${targetWidth}, ${targetHeight}, 0x0060);
+                        'RESIZE_DONE'
+                    } else {
+                        'WINDOW_NOT_FOUND'
+                    }
+                `.replace(/\n/g, ' ');
+
+                exec(`powershell -Command "${psCommand}"`, (psErr, stdout) => {
+                    if (psErr) {
+                        console.error('[PS Exec Error]:', psErr.message);
                         return;
                     }
-
-                    if (!stdout.includes('war3.exe')) {
-                        console.log('[Status] 魔兽已关闭，执行清理...');
-                        clearInterval(checkTimer);
-                        safeCleanup(gamePath, dllFiles);
-                    }
+                    console.log(`[PS Output]: ${stdout.trim()}`);
                 });
-            }, 5000); // 延长到 5 秒检查一次，减轻压力
-        });
+            }, waitTime);
 
-        child.on('error', (err) => {
-            console.error('[Spawn Error]:', err);
-            safeCleanup(gamePath, dllFiles);
+            // 启动关闭监控
+            startWar3ExitMonitor(gamePath, dllFiles);
         });
 
     } catch (err) {
         console.error('[Fatal Error]:', err.message);
-        // 发生任何错误都要尝试清理，防止残留
         safeCleanup(gamePath, dllFiles);
     }
 }
+
+// --- 修正后的监控函数：极致稳健版 ---
+function startWar3ExitMonitor(gamePath, dllFiles) {
+    // 1. 延迟启动：等 10 秒再开始监控，避开启动时的不稳定期
+    setTimeout(() => {
+        let missingCount = 0; // 记录连续检测不到的次数
+
+        const checkTimer = setInterval(() => {
+            exec('tasklist /NH /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
+                // 判断逻辑：如果没有报错且 stdout 确实不包含 war3.exe
+                const isMissing = !err && (!stdout || !stdout.includes('war3.exe'));
+
+                if (isMissing) {
+                    missingCount++;
+                    console.log(`[Status] 进程检测不到 (${missingCount}/3)...`);
+                } else {
+                    missingCount = 0; // 只要检测到一次，计数器归零
+                }
+
+                // 只有连续 3 次（15秒）检测不到，才判定为真的退出
+                if (missingCount >= 3) {
+                    console.log('[Status] 确认魔兽已彻底关闭，执行清理...');
+                    clearInterval(checkTimer);
+                    
+                    dllFiles.forEach(file => {
+                        try {
+                            const p = path.join(gamePath, file);
+                            if (fs.existsSync(p)) fs.unlinkSync(p);
+                        } catch (e) {
+                            // 正在占用的文件删不掉是正常的，说明还没关透
+                        }
+                    });
+                }
+            });
+        }, 5000); // 每 5 秒检测一次
+    }, 10000); 
+}
+
+
+
+
 // --- 辅助函数：清理 DLL ---
 function cleanupDLLs(gamePath, dllFiles) {
     console.log('[Cleanup] 正在从魔兽目录删除插件 DLL...');
