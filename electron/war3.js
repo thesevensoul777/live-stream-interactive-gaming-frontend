@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Tools } from './until/tools.js';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
 import fsExtra from 'fs-extra'; // 建议使用 fs-extra 处理拷贝，或者用原生 fs.copyFileSync
 
 
@@ -239,51 +239,131 @@ const getPluginDir = () => {
  */
 // --- [变量声明置顶] ---
 
+// --- [工具函数：安全清理] ---
+const safeCleanup = (gamePath, dllFiles) => {
+    dllFiles.forEach(file => {
+        const target = path.join(gamePath, file);
+        try {
+            if (fs.existsSync(target)) {
+                fs.unlinkSync(target);
+                console.log(`[Cleanup] 已删除: ${file}`);
+            }
+        } catch (e) {
+            // 忽略被占用的错误
+        }
+    });
+};
+
 export async function launchWarcraft(gamePath) {
-    // --- 变量声明置顶 ---
+    // --- 1. 变量声明严格置顶 ---
     const isDev = !app.isPackaged;
     const resourceBase = isDev ? app.getAppPath() : process.resourcesPath;
-
-    // 1. 注入器路径：开发环境下在 electron/bin，生产环境下在 resources/bin
+    
+    // 路径对齐
     const injectorExe = path.join(resourceBase, 'bin', 'War3Injector.exe');
-
-    // 2. 魔兽路径处理：gamePath 传进来的是目录，我们需要指向 Exe
     const war3Exe = path.join(gamePath, 'war3.exe');
-    const war3Dir = gamePath; // 工作目录就是文件夹本身
-
-    // 3. 插件根目录 (-kkwe 参数)：就在 resourceBase 下的 war3plugin
+    const war3Dir = gamePath;
+    const copySourceDir = path.join(resourceBase, 'war3plugin', 'copyDLL');
     const kkweRoot = path.join(resourceBase, 'war3plugin');
-
-    // 4. 引导 DLL 路径
     const loaderDll = path.join(kkweRoot, 'plugin', 'warcraft3', 'yd_loader.dll');
-
-    // 封装参数
+    
+    // 需要搬运的 DLL 列表
+    const dllFiles = [
+        'd3d8.dll', 'scriptrunner.dll', 'SlkLib.dll', 'luacore.dll', 
+        'yd_size_limit.dll', 'yd_jass_api.dll', 'ydbase.dll', 
+        'yd_virtual_mpq.dll', 'yd_lua_engine.dll', 'yd_loader.dll'
+    ];
     const args = [war3Exe, war3Dir, kkweRoot, loaderDll];
 
-    console.log('[Launch] 路径自动匹配成功：');
-    console.log('-> Injector:', injectorExe);
-    console.log('-> War3Exe:', war3Exe);
-    console.log('-> KKWE_ROOT:', kkweRoot);
+    console.log('[Prepare] 检查并准备环境...');
 
-    // 执行逻辑
     try {
-        // 校验文件是否存在，防止 C# 报错闪退
-        if (!fs.existsSync(injectorExe)) throw new Error(`找不到注入器: ${injectorExe}`);
-        if (!fs.existsSync(war3Exe)) throw new Error(`找不到魔兽程序: ${war3Exe}`);
-
-        const child = spawn(injectorExe, args, {
-            cwd: path.dirname(injectorExe),
-            windowsHide: false,
-            shell: false
+        // --- 2. 预检与拷贝 ---
+        if (!fs.existsSync(copySourceDir)) throw new Error(`找不到 copyDLL 目录: ${copySourceDir}`);
+        
+        dllFiles.forEach(file => {
+            const src = path.join(copySourceDir, file);
+            const dest = path.join(gamePath, file);
+            if (fs.existsSync(src)) {
+                fs.copyFileSync(src, dest);
+            }
         });
 
-        child.stdout.on('data', (data) => console.log(`[C# Output]: ${data}`));
-        child.stderr.on('data', (data) => console.error(`[C# Error]: ${data}`));
-        child.on('close', (code) => console.log(`[C# Process] 退出码: ${code}`));
+        // --- 3. 执行注入器 ---
+        const child = spawn(injectorExe, args, {
+            cwd: path.dirname(injectorExe),
+            windowsHide: false
+        });
+
+        child.stdout.on('data', (data) => console.log(`[C# Out]: ${data.toString().trim()}`));
+        child.stderr.on('data', (data) => console.error(`[C# Err]: ${data.toString().trim()}`));
+
+        child.on('close', (code) => {
+            console.log(`[C# Exit]: ${code}`);
+            
+            // --- 4. 轮询检测魔兽进程 ---
+            const checkTimer = setInterval(() => {
+                // 使用内部声明防止作用域问题
+                exec('tasklist /NH /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
+                    if (err) {
+                        clearInterval(checkTimer);
+                        return;
+                    }
+
+                    if (!stdout.includes('war3.exe')) {
+                        console.log('[Status] 魔兽已关闭，执行清理...');
+                        clearInterval(checkTimer);
+                        safeCleanup(gamePath, dllFiles);
+                    }
+                });
+            }, 5000); // 延长到 5 秒检查一次，减轻压力
+        });
+
+        child.on('error', (err) => {
+            console.error('[Spawn Error]:', err);
+            safeCleanup(gamePath, dllFiles);
+        });
 
     } catch (err) {
-        console.error('[Launch Error]:', err.message);
+        console.error('[Fatal Error]:', err.message);
+        // 发生任何错误都要尝试清理，防止残留
+        safeCleanup(gamePath, dllFiles);
     }
+}
+// --- 辅助函数：清理 DLL ---
+function cleanupDLLs(gamePath, dllFiles) {
+    console.log('[Cleanup] 正在从魔兽目录删除插件 DLL...');
+    dllFiles.forEach(file => {
+        const target = path.join(gamePath, file);
+        if (fs.existsSync(target)) {
+            try {
+                fs.unlinkSync(target);
+            } catch (e) {
+                console.error(`无法删除 ${file}, 可能文件被占用`);
+            }
+        }
+    });
+}
+
+// --- 辅助函数：检测魔兽运行状态 ---
+function checkWar3Status(gamePath, dllFiles) {
+    const checkTimer = setInterval(() => {
+        // 使用 tasklist 命令检查 war3.exe 是否在运行
+        const cmd = 'tasklist /NH /FI "IMAGENAME eq war3.exe"';
+        const { exec } = require('child_process');
+        
+        exec(cmd, (err, stdout) => {
+            if (stdout && stdout.includes('war3.exe')) {
+                // 游戏还在运行，继续等待
+                // console.log('War3 is running...');
+            } else {
+                // 游戏已关闭
+                console.log('[Status] 检测到魔兽已关闭，准备清理文件...');
+                cleanupDLLs(gamePath, dllFiles);
+                clearInterval(checkTimer);
+            }
+        });
+    }, 3000); // 每 3 秒检查一次
 }
 // --- 锁机制 ---
 async function acquireFileLock(filePath) {
@@ -300,3 +380,6 @@ function releaseFileLock(filePath) {
 export function injectWar3(){
 
 }
+
+
+
