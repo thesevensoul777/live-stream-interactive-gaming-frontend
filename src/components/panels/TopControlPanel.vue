@@ -25,6 +25,8 @@
   <!-- 操作按钮 -->
   <div class="actions">
 
+    
+
     <button
       :class="{'confirmed': confirmed}"
       @click="chooseFolder"
@@ -42,8 +44,9 @@
   :disabled="!path" 
   @click="launchGame"
 >
-  启动游戏
+   启动游戏
 </button>
+
 
     <!-- <button @click="stop">断开</button> -->
   </div>
@@ -69,6 +72,11 @@
 
   
   <div class="actions">
+        <button 
+  @click="toggleTest"
+>
+  测试礼物
+</button>
 <button @click="send">补送</button>
 <button @click="openOverlay">开启特效</button>
   </div>
@@ -95,9 +103,11 @@ import { injectWar3} from '@/core/actionRequests';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { useAuthStore } from '@/stores/auth'
 import { handleDanmu } from '@/core/actionRequests';
+import { runDanmuTest } from '@/test/testMock';
 
 
 const authStore = useAuthStore()
+const testTimer = ref<any>(null);
 
 
 const user = computed(() => authStore.user)
@@ -157,6 +167,18 @@ function toggleListen(): void {
    injectWar3(false);
 
 }
+
+
+const toggleTest = () => {
+  if (testTimer.value) {
+    clearInterval(testTimer.value);
+    testTimer.value = null;
+  } else {
+    testTimer.value = runDanmuTest();
+  }
+};
+
+
 
 // 调用 actionRequests 中的注入方法或直接触发 IPC
 async function launchGame() {

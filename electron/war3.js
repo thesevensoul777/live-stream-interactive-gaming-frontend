@@ -4,7 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Tools } from './until/tools.js';
 import { spawn, exec } from 'child_process';
-import fsExtra from 'fs-extra'; // 建议使用 fs-extra 处理拷贝，或者用原生 fs.copyFileSync
+import { bufferService } from './services/BufferService.js';
 
 
 // 变量声明置顶
@@ -28,17 +28,37 @@ function AAA takes nothing returns nothing
     call PreloadEnd(0.0)
 endfunction`;
 
+
+// 在你的第一个代码文件中
 export function getWarcraftPath(paths) {
+    if (!paths) return;
     const dir = path.join(paths, 'GameData', 'TerritoryWars');
     CommandPath = path.join(dir, 'TerritoryWarsCmd-2147483648');
     GiftPath = path.join(dir, 'TerritoryWarsGift-2147483648');
     LikePath = path.join(dir, 'TerritoryWarsLike-2147483648');
+    console.log("[PathInit] 监听路径已就绪:", dir);
 }
 
 /**
  * 核心公共方法：向魔兽文件追加指令队列
  */
 async function writeToWarcraftQueue(filePath, dataString) {
+    // --- 守卫逻辑：如果路径没准备好，拒绝执行 ---
+    if (!filePath) {
+        console.error("[Error] 写入中止：文件路径为空。请先设置魔兽游戏路径。");
+        // 尝试自动修复一次
+        const autoPath = bufferService.getGamePath();
+        console.error("[Error] 写入中止：文件路径为空。请先设置魔兽游戏路径。");
+        if (autoPath) {
+            getWarcraftPath(autoPath);
+            // 重新获取一下路径，如果还是没拿到，就退出
+            if (!CommandPath) return; 
+        } else {
+            return;
+        }
+    }
+
+
     await acquireFileLock(filePath);
     try {
         // 1. 等待文件被清空（没有业务关键字）
@@ -97,14 +117,16 @@ async function waitUntilFileReadyByPath(filePath, intervalMs = 100) {
     }
 }
 
+
 // --- 业务接口 ---
 
 export async function saveCommand(payload) {
     try {
+
         const fullText = `|realId=${tool.encodeValue(payload.msg.realId)}|` +
                          `*user=${tool.encodeValue(payload.msg.user)}|` +
                          `*command=${tool.encodeValue(payload.action)}`;
-        
+   
         await writeToWarcraftQueue(CommandPath, fullText);
         return { ok: true };
     } catch (err) {
@@ -114,7 +136,9 @@ export async function saveCommand(payload) {
 }
 
 export async function saveGift(msg) {
+  
     try {
+
         const encodedUser = tool.encodeValue(msg.user);
         const encodedId = tool.encodeValue(msg.realId);
         
@@ -132,6 +156,7 @@ export async function saveGift(msg) {
 }
 
 export async function saveLike(msg) {
+    
     try {
         const fullText =  `|realId=${tool.encodeValue(msg.realId)}|` +
                          `*user=${tool.encodeValue(msg.user)}|` +
@@ -351,12 +376,12 @@ export async function launchWarcraft(gamePath) {
             }, waitTime);
 
             // 启动关闭监控
-            startWar3ExitMonitor(gamePath, dllFiles);
+          //  startWar3ExitMonitor(gamePath, dllFiles);
         });
 
     } catch (err) {
         console.error('[Fatal Error]:', err.message);
-        safeCleanup(gamePath, dllFiles);
+     //   safeCleanup(gamePath, dllFiles);
     }
 }
 

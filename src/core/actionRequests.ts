@@ -35,28 +35,31 @@ const COMMAND_MAP: Record<string, string> = {
  */
 const GIFT_MAP: Record<string, string> = {
   // --- 1. 基础小礼物 (1-9 抖币) ---
-  '463':   'ADD_INT',            // 小心心: 智力+1/0.1护甲
-  '164':   'ADD_STR',            // 抖音: 力量+1/10血量
-  '3992':  'ADD_AGI',            // 人气票: 敏捷+1/+攻击力
+  '463':   'ADD_INT',            // 小心心: 智力+1：英雄
+  '164':   'ADD_STR',            // 抖音: 力量+1：英雄
+  '3992':  'ADD_AGI',            // 人气票: 敏捷+1：英雄
+  '2001':'ADD_HP' ,              //玫瑰：血量：+1：普通单位
+  '3597':  'ADD_ATT',            //加油呀：攻击力+5：普通单位
   '2002':  'SPAWN_MELEE',        // 大啤酒: 近战单位
   '3481':  'SPAWN_RANGE',        // 你最好看: 远程单位
   '165':   'SPAWN_MAGIC',        // 棒棒糖: 魔法/控制单位
   '2006':  'SPAWN_ELITE',        // 鲜花: 高级兵种
-  '3621':  'CHANGE_HERO',        // 爱你呦: 切换英雄化身 (ChangeHero)
-  '3620':  'CHANGE_SUMMONER',     // 送你花花: 切换召唤师类型 
-  '2114':  'ADD_GOLD_3000',      // 奇幻礼花筒: 金币 3000
-  '781':  'ADD_LUMBER_3000',    // 比心: 木材 3000 
-
-  // --- 2. 中大型礼物 (战局逆转) ---
-  '685':   'TEAM_BUFF_SMALL',    // 粉丝团灯牌: 全体+5全属性, 召唤师+200经验
-  '3780':  'TEAM_BUFF_LARGE',    // 比心兔兔: 所有召唤单位+50全属性
-  '3531':  'SUMMON_EPIC_HERO',   // 私人飞机: 史诗级中立英雄 (持续100s)
-
-  // --- 3. 空中打击 (特定召唤) ---
-  '5564':  'SUMMON_HIPPOGRYPH',  // 闪耀星辰: 10x 角鹰兽
-  '5503':  'SUMMON_WIND_RIDER',  // 黄桃罐头: 10x 风骑士
-  '3447':  'SUMMON_FROST_WYRM',  // 亲吻: 10x 冰霜巨龙
+  '2114':  'ADD_LOW_POWER',      // 奇幻礼花筒: 英雄+50全属性，普通单位+50血量，+30攻击力
+  '3780':  'ADD_HIGHT_POWER',    // 比心兔兔: 英雄+100全属性，普通单位+100血量，+50攻击力
+  '3621':  'CHANGE_HERO',        // 爱你呦:切换召唤师类型 
+  '5564':  'SUMMON_SIEGE',  // 闪耀星辰: 攻城单位+*10
+  '685':   'TEAM_BUFF_SMALL',    // 粉丝团灯牌: 英雄+10全属性，随机装备+1，普通单位+10血量，+10攻击力
+  '781':  'ADD_HIGHT_POWER',    // 比心: 获得 10000金币和木材
 };
+
+
+
+// '3620':  'CHANGE_SUMMONER',     // 送你花花:  切换英雄化身 (ChangeHero)
+  // --- 2. 中大型礼物 (战局逆转) ---
+ // '3531':  'SUMMON_EPIC_HERO',   // 私人飞机: 史诗级中立英雄 (持续100s)
+  // --- 3. 空中打击 (特定召唤) ---
+ // '5503':  'SUMMON_WIND_RIDER',  // 黄桃罐头: 10x 风骑士
+  //'3447':  'SUMMON_FROST_WYRM',  // 亲吻: 10x 冰霜巨龙
 
 
 
@@ -82,6 +85,7 @@ export function handleDanmu(msgs: DyMessage[]) {
     // ③ 只对 CHAT 解析命令
 if (msg.method !== CastMethod.CHAT) return;
     
+
     const userName = msg.user?.name;
     const content = msg.content?.trim();
     if (!userName || !content) return;

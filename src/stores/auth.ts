@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { currentUserApi } from '@/api/auth'
 
 export interface CurrentUser {
@@ -10,18 +10,32 @@ export interface CurrentUser {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-
   const user = ref<CurrentUser | null>(null)
-  const loading = ref(false);
+  const loading = ref(false)
+
+  // 优化：只要本地有 token，我们就暂时认为它是“已认证”状态，直到 fetchCurrentUser 失败
+  const isAuthenticated = computed(() => !!user.value || !!localStorage.getItem('access_token'))
+
   async function fetchCurrentUser() {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+        user.value = null
+        return
+    }
+
     loading.value = true
     try {
       const res = await currentUserApi()
-      user.value = res.data.data;
-       (window as any).auth.setToken(localStorage.getItem('access_token'))
+      // 对应你的 ApiResponse<T> 结构：res.data 是包装层，res.data.data 是具体用户
+      user.value = res.data.data 
+      
+      // 如果 Electron 环境存在，同步 Token
+      if ((window as any).auth?.setToken) {
+        (window as any).auth.setToken(token)
+      }
     } catch (err) {
-      user.value = null
-      throw err
+      console.error("验证登录状态失败:", err)
+      logout() // 失败则清理掉本地的 30 天过期 Token
     } finally {
       loading.value = false
     }
@@ -30,12 +44,14 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     user.value = null
     localStorage.removeItem('access_token')
-    localStorage.removeItem('token_exp')
+    // 如果有 Hash 路由，跳转到登录
+    window.location.hash = '/login'
   }
 
   return {
     user,
     loading,
+    isAuthenticated,
     fetchCurrentUser,
     logout
   }

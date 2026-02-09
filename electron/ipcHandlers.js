@@ -1,11 +1,9 @@
 import { app, BrowserWindow, ipcMain, net,dialog  } from 'electron'
-import { BufferService } from './services/BufferService.js';
+import { bufferService } from './services/BufferService.js';
 import { injectWar3 ,saveCommand ,getWarcraftPath,saveGift,saveLike ,launchWarcraft} from './war3.js';
 import {WindowManager} from './windowManager.js'
 import path from 'path';
 
-
-  const bufferService = new BufferService()
   const windowManager = new WindowManager()
 let overlayWin = null; // 声明特效窗口变量
 
@@ -189,6 +187,7 @@ ipcMain.handle('select-folder', async (_event) => {
 if (result.filePaths.length > 0) {
     const path = result.filePaths[0];
     bufferService.setGamePath(path); // 存入 service
+    getWarcraftPath(path)
     return path;
   }
   return null;

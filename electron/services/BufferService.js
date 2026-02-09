@@ -40,6 +40,7 @@ export class BufferService {
    * @returns {string}
    */
   getGamePath() {
+        console.log('BufferService: 当前游戏路径是', this.gamePath)
     return this.gamePath
   }
 
@@ -155,3 +156,5 @@ if (!res.ok) {
     }
   }
 }
+
+export const bufferService = new BufferService();
