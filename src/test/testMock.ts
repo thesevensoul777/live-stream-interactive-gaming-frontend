@@ -60,11 +60,15 @@ export function runDanmuTest() {
       const type = Math.random();
       if (type < 0.4) {
         mockMsg.method = CastMethod.CHAT;
-        mockMsg.content = ["上", "下", "换英雄", "666"][Math.floor(Math.random() * 4)];
+        mockMsg.content = ["上", "下","中",  "换职业", "666","回"][Math.floor(Math.random() * 4)];
         console.log(`[测试-弹幕] ${randomUser.name}: ${mockMsg.content}`);
       } 
       else if (type < 0.9) {
-        const giftIds = ["463", "164", "2001"];
+       const giftIds = [
+  "463",  "164",  "3992", "2001", "3597", 
+  "2002", "3481", "165",  "2006", "2114", 
+  "3780", "5564", "685",  "781"
+];
         const giftId = giftIds[Math.floor(Math.random() * giftIds.length)];
         mockMsg.method = CastMethod.GIFT;
         mockMsg.gift = { id: giftId, count: Math.floor(Math.random() * 5) + 1, name: "测试礼物" };
@@ -84,3 +88,4 @@ export function runDanmuTest() {
 
   return { stop: () => clearInterval(timer) };
 }
+
