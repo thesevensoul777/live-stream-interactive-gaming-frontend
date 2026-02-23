@@ -183,67 +183,6 @@ const getPluginDir = () => {
     }
 };
 
-/**
- * 启动魔兽争霸并注入插件
- * @param {string} gamePath 游戏根目录路径
- */
-// export async function launchWarcraft(gamePath) {
-//     // --- 变量声明严格置顶 ---
-//     const kkweBin = `D:\\SnowNightWE\\bin`; // 你的 DLL 来源目录
-//     const war3Exe = path.join(gamePath, 'war3.exe');
-    
-//     // 必须要拷贝的最小集合（复刻雪夜环境）
-//     const essentialDlls = [
-//         'ydbase.dll',
-//         'yd_loader.dll',
-//         'yd_virtual_mpq.dll',
-//         'yd_lua_engine.dll',
-//         'yd_jass_api.dll',
-//         'yd_size_limit.dll', // 解决大地图进不去的问题
-//         'luacore.dll',
-//         'SlkLib.dll'
-//     ];
-
-//     try {
-//         console.log('[Inject] 正在复刻雪夜 WE 运行环境...');
-
-//         // 1. 批量拷贝 DLL 到魔兽根目录
-//         essentialDlls.forEach(dll => {
-//             const src = path.join(kkweBin, dll);
-//             const dest = path.join(gamePath, dll);
-//             if (fs.existsSync(src)) {
-//                 fs.copyFileSync(src, dest);
-//             }
-//         });
-
-//         // 2. 关键：寻找“点火开关”
-//         // 将 yd_loader.dll 复制并改名为 version.dll
-//         // 魔兽启动会自动运行 version.dll，而 yd_loader 会负责拉起其他 yd_*.dll
-//         const loaderSrc = path.join(kkweBin, 'yd_loader.dll');
-//         const loaderDest = path.join(gamePath, 'version.dll');
-//         if (fs.existsSync(loaderSrc)) {
-//             fs.copyFileSync(loaderSrc, loaderDest);
-//         }
-
-
-
-//         // 4. 执行启动
-//         const child = spawn(war3Exe, ['-window'], {
-//             cwd: gamePath,
-//             detached: true,
-//             stdio: 'ignore'
-//         });
-
-//         child.unref();
-//         console.log('[Launch] 环境已就绪，魔兽启动中...');
-//         return { ok: true };
-
-//     } catch (err) {
-//         console.error('[Error] 复刻失败:', err);
-//         return { ok: false, error: err.message };
-//     }
-// }
-
 
 
 /**
@@ -375,8 +314,10 @@ export async function launchWarcraft(gamePath) {
                 });
             }, waitTime);
 
+            handleGameEnd(gamePath);
+
             // 启动关闭监控
-          //  startWar3ExitMonitor(gamePath, dllFiles);
+            startWar3ExitMonitor(gamePath, dllFiles);
         });
 
     } catch (err) {
@@ -387,23 +328,29 @@ export async function launchWarcraft(gamePath) {
 
 // --- 修正后的监控函数：极致稳健版 ---
 function startWar3ExitMonitor(gamePath, dllFiles) {
-    // 1. 延迟启动：等 10 秒再开始监控，避开启动时的不稳定期
+    // --- 变量声明置顶 ---
+    const checkInterval = 5000;
+    const delayStart = 10000;
+    let missingCount = 0;
+
     setTimeout(() => {
-        let missingCount = 0; // 记录连续检测不到的次数
-
         const checkTimer = setInterval(() => {
-            exec('tasklist /NH /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
-                // 判断逻辑：如果没有报错且 stdout 确实不包含 war3.exe
-                const isMissing = !err && (!stdout || !stdout.includes('war3.exe'));
+            // 使用 PowerShell 检测进程，更加稳健
+            // Get-Process 会匹配所有包含 war3 的进程，不管是 War3.exe 还是 war3.exe
+            const psCmd = `powershell "Get-Process | Where-Object {$_.ProcessName -like '*war3*'} | Select-Object -ExpandProperty ProcessName"`;
 
-                if (isMissing) {
+            exec(psCmd, (err, stdout) => {
+                // 如果输出为空，说明没找到进程
+                const isRunning = stdout && stdout.trim().toLowerCase().includes('war3');
+
+                if (!isRunning) {
                     missingCount++;
                     console.log(`[Status] 进程检测不到 (${missingCount}/3)...`);
                 } else {
-                    missingCount = 0; // 只要检测到一次，计数器归零
+                    if (missingCount > 0) console.log(`[Status] 进程重新捕获: ${stdout.trim()}`);
+                    missingCount = 0; 
                 }
 
-                // 只有连续 3 次（15秒）检测不到，才判定为真的退出
                 if (missingCount >= 3) {
                     console.log('[Status] 确认魔兽已彻底关闭，执行清理...');
                     clearInterval(checkTimer);
@@ -413,15 +360,137 @@ function startWar3ExitMonitor(gamePath, dllFiles) {
                             const p = path.join(gamePath, file);
                             if (fs.existsSync(p)) fs.unlinkSync(p);
                         } catch (e) {
-                            // 正在占用的文件删不掉是正常的，说明还没关透
+                            // 忽略占用
                         }
                     });
                 }
             });
-        }, 5000); // 每 5 秒检测一次
-    }, 10000); 
+        }, checkInterval);
+    }, delayStart);
 }
 
+
+
+
+// 假设你在某个地方启动了这个监听
+/**
+ * 处理结算逻辑的循环监听
+ * @param {string} gamePath 魔兽根目录
+ */
+async function handleGameEnd(gamePath) {
+    // --- 变量声明置顶 ---
+    const summaryFile = path.join(gamePath, 'GameData', 'TerritoryWars', 'Summary-2147483648');
+    let results = [];
+    let isWar3Running = true;
+
+    console.log("[Summary] 启动结算自动监听重载流程...");
+
+    // 只要魔兽还在运行，就持续监听结算文件
+    while (isWar3Running) {
+        // 等待一局游戏的结算数据
+        results = await watchGameSummary(summaryFile);
+
+        if (results && results.length > 0) {
+            console.log(`[Summary] 捕获到 ${results.length} 名玩家结算，准备上传...`);
+            
+            // 异步处理上传，不要阻塞监听下一局
+            results.forEach(playerData => {
+                // 这里调用你的数据库接口，例如：
+                // apiService.uploadPlayerScore(playerData).catch(e => console.error("上传失败", e));
+                console.log("上报数据内容:", playerData);
+            });
+        }
+
+        // 检查魔兽是否还在运行（通过简单的进程检测）
+        // 如果魔兽关了，跳出循环，结束监听任务
+        isWar3Running = await new Promise(resolve => {
+            exec('tasklist /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
+                resolve(stdout.toLowerCase().includes('war3.exe'));
+            });
+        });
+        
+        // 稍微喘息一下，防止 CPU 过高
+        await new Promise(r => setTimeout(r, 2000));
+    }
+    console.log("[Summary] 魔兽已关闭，结算监听任务自然结束。");
+}
+
+/**
+ * 监听并获取魔兽结算数据
+ */
+export async function watchGameSummary(summaryPath) {
+    // --- 变量声明置顶 ---
+    const checkInterval = 1500; 
+    const pattern = /SetPlayerName\s*\(\s*Player\s*\(\d+\)\s*,\s*"(.*?)"\s*\)/g;
+    let rawContent = "";
+    let match;
+    let combinedString = "";
+    let playersData = [];
+    let segments = [];
+    let startIndex = -1;
+    let isWar3Active = true;
+
+    console.log("[Summary] 正在等待游戏结算触发...");
+
+    while (true) {
+        if (fs.existsSync(summaryPath)) {
+            try {
+                rawContent = fs.readFileSync(summaryPath, 'utf-8');
+
+                // 业务特征码校验
+                if (rawContent.includes('realId=') && rawContent.includes('function PreloadFiles')) {
+                    combinedString = "";
+                    playersData = []; // 清空数组准备装载
+
+                    // 1. 提取并拼接字符串
+                    while ((match = pattern.exec(rawContent)) !== null) {
+                        combinedString += match[1].trim();
+                    }
+
+                    // 2. 切割数据块
+                    segments = combinedString.split(/(?=-\|realId=)/);
+                    
+                  segments.forEach(segment => {
+    // --- 变量声明置顶 ---
+    let cleanData = segment.trim();
+    let startIndex = -1;
+
+    startIndex = cleanData.indexOf('|realId=');
+    if (startIndex !== -1) {
+        cleanData = cleanData.substring(startIndex);
+        
+        // 【新增处理】移除末尾多余的连字符或特殊符号
+        // 使用 replace /-$|-$| /g 或者简单的 trimEnd
+        cleanData = cleanData.replace(/-+$/, ''); 
+        
+        if (cleanData) {
+            playersData.push(cleanData);
+        }
+    }
+});
+
+                    // 3. 关键：解析完成后立即重置文件
+                    // 防止 watchGameSummary 还没退出就被下一轮循环再次读到旧数据
+                    fs.writeFileSync(summaryPath, JASS_TEMPLATE, 'utf-8');
+                    
+                    return playersData; 
+                }
+            } catch (err) {
+                // 忽略文件锁定异常
+            }
+        }
+
+        // 检查进程，如果魔兽中途被强杀，防止此循环变成死循环
+        if (Math.random() > 0.9) { // 没必要每次都查进程，降低频率
+            isWar3Active = await new Promise(res => {
+                exec('tasklist /FI "IMAGENAME eq war3.exe"', (e, s) => res(s.includes('war3.exe')));
+            });
+            if (!isWar3Active) return [];
+        }
+
+        await new Promise(r => setTimeout(r, checkInterval));
+    }
+}
 
 
 
@@ -440,26 +509,6 @@ function cleanupDLLs(gamePath, dllFiles) {
     });
 }
 
-// --- 辅助函数：检测魔兽运行状态 ---
-function checkWar3Status(gamePath, dllFiles) {
-    const checkTimer = setInterval(() => {
-        // 使用 tasklist 命令检查 war3.exe 是否在运行
-        const cmd = 'tasklist /NH /FI "IMAGENAME eq war3.exe"';
-        const { exec } = require('child_process');
-        
-        exec(cmd, (err, stdout) => {
-            if (stdout && stdout.includes('war3.exe')) {
-                // 游戏还在运行，继续等待
-                // console.log('War3 is running...');
-            } else {
-                // 游戏已关闭
-                console.log('[Status] 检测到魔兽已关闭，准备清理文件...');
-                cleanupDLLs(gamePath, dllFiles);
-                clearInterval(checkTimer);
-            }
-        });
-    }, 3000); // 每 3 秒检查一次
-}
 // --- 锁机制 ---
 async function acquireFileLock(filePath) {
     while (fileWriteLocks.get(filePath)) {

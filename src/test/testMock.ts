@@ -58,17 +58,21 @@ export function runDanmuTest() {
     // --- 阶段 2: 随机压测逻辑保持不变 ---
     else {
       const type = Math.random();
-      if (type < 0.4) {
+      if (type < 0.1) {
         mockMsg.method = CastMethod.CHAT;
         mockMsg.content = ["上", "下","中",  "换职业", "666","回"][Math.floor(Math.random() * 4)];
         console.log(`[测试-弹幕] ${randomUser.name}: ${mockMsg.content}`);
       } 
-      else if (type < 0.9) {
+      else if (type < 1) {
+//        const giftIds = [
+//   "463",  "164",  "3992", "2001", "3597", 
+//   "2002", "3481", "165",  "2006", "2114", 
+//   "3780", "5564", "685",  "781"
+// ];
+
        const giftIds = [
-  "463",  "164",  "3992", "2001", "3597", 
-  "2002", "3481", "165",  "2006", "2114", 
-  "3780", "5564", "685",  "781"
-];
+"2006","2002","165","3481"
+ ];
         const giftId = giftIds[Math.floor(Math.random() * giftIds.length)];
         mockMsg.method = CastMethod.GIFT;
         mockMsg.gift = { id: giftId, count: Math.floor(Math.random() * 5) + 1, name: "测试礼物" };
