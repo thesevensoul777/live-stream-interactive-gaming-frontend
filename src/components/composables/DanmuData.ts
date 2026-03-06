@@ -40,7 +40,8 @@ export function useDanmuStore() {
         const res = await syncRank({
           douyinUserId: msg.realId,
           douyinName: msg.user,
-          gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D"
+          gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D",
+          avatarUrl:msg.avatar
         });
 
         if (res.data.success) {

@@ -221,7 +221,7 @@ const safeCleanup = (gamePath, dllFiles) => {
     });
 };
 
-export async function launchWarcraft(gamePath) {
+export async function launchWarcraft(gamePath,win) {
     // --- 1. 变量声明严格置顶 ---
     const isDev = !app.isPackaged;
     const resourceBase = isDev ? app.getAppPath() : process.resourcesPath;
@@ -315,7 +315,7 @@ export async function launchWarcraft(gamePath) {
                 });
             }, waitTime);
 
-            handleGameEnd(gamePath);
+            handleGameEnd(gamePath,win);
 
             // 启动关闭监控
             startWar3ExitMonitor(gamePath, dllFiles);
@@ -377,31 +377,55 @@ function startWar3ExitMonitor(gamePath, dllFiles) {
  * 输入: |realId=123|*rank=5|*score=0
  * 输出: { realId: "123", rank: "5", score: "0" }
  */
+/**
+ * 将魔兽原始字符串解析为键值对对象
+ * 并在此处统一完成：1. 字段名映射 2. 数据类型转换
+ */
 function parsePlayerData(rawString) {
-    // --- 变量声明置顶 ---
     const result = {};
     const parts = rawString.split('|');
-    let key = '';
-    let val = '';
+    
+    // 💡 映射表：魔兽原始 Key -> 你的 API 字段名
+    const keyMap = {
+        'realId': 'douyinUserId',
+        'rank':   'TierPoints',
+        'score':  'RankPoints',
+        'kills':  'Kills'
+    };
+
+    // 💡 需要转为数字的字段列表 (使用你映射后的 API 字段名)
+    const numericFields = ['TierPoints', 'RankPoints', 'Kills'];
 
     parts.forEach(part => {
         if (part.includes('=')) {
-            [key, val] = part.split('=');
-            // 去掉 key 开头的 * 号，并存入对象
-            result[key.replace(/^\*/, '')] = val;
+            let [rawKey, val] = part.split('=');
+            
+            // 1. 清理魔兽 Key (去掉开头的 * 号)
+            const cleanKey = rawKey.replace(/^\*/, '');
+            
+            // 2. 查找映射后的字段名，如果没在 map 里，就用原名
+            const apiKey = keyMap[cleanKey] || cleanKey; 
+
+            // 3. 💡 类型转换逻辑写在这里
+            if (numericFields.includes(apiKey)) {
+                // 如果是 TierPoints/RankPoints/Kills，转为数字，转不了就给 0
+                result[apiKey] = Number(val) || 0;
+            } else {
+                // 其他字段（如 douyinUserId）保持字符串
+                result[apiKey] = val;
+            }
         }
     });
+
     return result;
 }
-
-
 
 // 假设你在某个地方启动了这个监听
 /**
  * 处理结算逻辑的循环监听
  * @param {string} gamePath 魔兽根目录
  */
-async function handleGameEnd(gamePath) {
+async function handleGameEnd(gamePath, win) {
     // --- 变量声明置顶 ---
     const summaryFile = path.join(gamePath, 'GameData', 'TerritoryWars', 'Summary-2147483648');
     let results = [];
@@ -416,24 +440,13 @@ async function handleGameEnd(gamePath) {
         results = await watchGameSummary(summaryFile);
 
         if (results && results.length > 0) {
-            console.log(`[Summary] 捕获到 ${results.length} 名玩家结算，开始格式化并上传...`);
-            
-            for (const rawPlayerStr of results) {
-                // 1. 将字符串转为对象
-                formattedData = parsePlayerData(rawPlayerStr);
-                
-                console.log("准备存入数据库的对象:", formattedData);
 
-                // 2. 调用数据库接口
-                // 这里建议使用 try-catch 防止单个上传失败影响整体
-                try {
-                    // 假设你的上传方法是这样：
-                    // await axios.post('你的API地址', formattedData);
-                    console.log(`[DB] 玩家 ${formattedData.realId} 数据上传成功`);
-                } catch (dbErr) {
-                    console.error(`[DB Error] 玩家 ${formattedData.realId} 上传失败:`, dbErr.message);
-                }
-            }
+        const allPlayers = results.map(raw => parsePlayerData(raw));
+    
+    if (win && !win.isDestroyed()) {
+        // 直接发送一整局的所有玩家数据
+        win.webContents.send('on-game-summary', allPlayers); 
+    }
         }
 
         // 检查魔兽是否还在运行

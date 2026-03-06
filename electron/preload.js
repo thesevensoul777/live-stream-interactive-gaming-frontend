@@ -36,6 +36,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('update-players-to-overlay');
     ipcRenderer.on('update-players-to-overlay', (_event, value) => callback(value));
   },
+ /**
+   * 游戏结算数据监听
+   * @param onSummaryReceived 结算回调函数
+   * @returns {Function} 清理函数
+   */
+  onGameSummary: (onSummaryReceived) => {
+    const summarySub = (_event, data) => onSummaryReceived(data);
+    
+    // 开启监听
+    ipcRenderer.on('on-game-summary', summarySub);
+
+    // 返回清理逻辑，供 Vue 组件 onUnmounted 调用
+    return () => {
+      ipcRenderer.removeListener('on-game-summary', summarySub);
+    };
+  },
   
   /**
    * Send a command to the main process

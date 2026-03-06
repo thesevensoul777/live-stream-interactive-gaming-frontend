@@ -99,7 +99,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref,useTemplateRef,computed,watch  } from 'vue'
+import { ref,useTemplateRef,computed,watch,onMounted,onUnmounted } from 'vue'
 import {
   CastMethod,
   DyCast,
@@ -118,11 +118,13 @@ import { useAuthStore } from '@/stores/auth'
 import { handleDanmu,ManualGiveGift } from '@/core/actionRequests';
 import { runDanmuTest } from '@/test/testMock';
 import type { GifddDTO } from "@/types/danmu";
+import type { GameSummaryRequest } from '@/api/dto/Player'
+import { postGameSummary } from '@/api/player'
 
 const authStore = useAuthStore()
 const testTimer = ref<any>(null);
 const ManualGiveGiftData= ref<GifddDTO>();
-
+let stopListening: () => void;
 const user = computed(() => authStore.user)
 
 const { appendCasts, clearDanmu,currentPlay } = useDanmuStore()
@@ -428,6 +430,42 @@ watch(
   },
   { immediate: true }
 )
+
+onMounted(() => {
+  console.log(">>> [Vue] 结算监听已就绪...");
+
+  stopListening = (window as any).electronAPI.onGameSummary(async (data: any[]) => {
+    // data 是魔兽传来的数组: [{douyinUserId: '1001', TierPoints: 5, RankPoints: 1, Kills: 1}, ...]
+    console.log("收到魔兽结算推送:", data);
+
+    try {
+      // 1. 组装数据
+      const payload: GameSummaryRequest = {
+        gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D", // 这里填入后端对应的 GameTypeId
+        players: data.map(item => ({
+          douyinUserId: item.douyinUserId,
+          rankPoints: item.RankPoints, // 注意：这里的 Key 要和魔兽传出的对应
+          tierPoints: item.TierPoints,
+          kills: item.Kills
+        }))
+      };
+
+      // 2. 发送请求
+      const res = await postGameSummary(payload);
+
+      if (res.data.success) {
+        console.log(`✅ 结算成功，处理了 ${res.data.processed} 名玩家数据`);
+      }
+    } catch (err) {
+      console.error("❌ 同步到服务器失败:", err);
+    }
+  });
+});
+
+onUnmounted(() => {
+  // 3. 组件卸载时必须销毁监听，否则下次进入页面会触发两次！
+  if (stopListening) stopListening();
+});
 
 </script>
 

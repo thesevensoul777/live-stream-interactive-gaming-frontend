@@ -7,7 +7,6 @@ import path from 'path';
   const windowManager = new WindowManager()
 let overlayWin = null; // 声明特效窗口变量
 
-console.log("ipc21122211")
 
 export function registerIpcHandlers(win) {
   ipcMain.handle('add-command', async (event, payload) => {
@@ -239,9 +238,9 @@ ipcMain.handle('launch-war3', async (event, gamePath) => {
         if (!finalPath) {
             throw new Error("未配置游戏路径");
         }
-
+      const win = BrowserWindow.fromWebContents(event.sender);
         // 调用刚才在 war3.js 里写的业务方法
-        return await launchWarcraft(finalPath);
+        return await launchWarcraft(finalPath,win);
     } catch (err) {
         return { ok: false, error: err.message };
     }
