@@ -1,6 +1,7 @@
 import { DyMessage,CastMethod } from "./dycast";
 import type { DanmuCommandDTO, GifddDTO, LikeDTO } from "@/types/danmu";
 import { useDanmuStore } from '@/components/composables/DanmuData'
+
 const ALLOWED_METHODS = new Set<CastMethod>([
   CastMethod.CHAT,
   CastMethod.LIKE,
@@ -26,6 +27,12 @@ const COMMAND_MAP: Record<string, string> = {
   '换职业':'CHANGE_CAREER',
   '回':'BACK',
   '换英雄':'CHANGE_HERO',
+  '买1':'BUY_1',
+  '买2':'BUY_2',
+  '买3':'BUY_3',
+  '买4':'BUY_4',
+  '买5':'BUY_5',
+  '买6':'BUY_6',
 };
 
 /**
@@ -35,24 +42,39 @@ const COMMAND_MAP: Record<string, string> = {
  */
 const GIFT_MAP: Record<string, string> = {
   // --- 1. 基础小礼物 (1-9 抖币) ---
-  '463':   'ADD_INT',            // 小心心: 智力+1：英雄
-  '164':   'ADD_STR',            // 抖音: 力量+1：英雄
-  '3992':  'ADD_AGI',            // 人气票: 敏捷+1：英雄
-  '2001':'ADD_HP' ,              //玫瑰：血量：+1：普通单位
-  '3597':  'ADD_ATT',            //加油呀：攻击力+5：普通单位
-  '2002':  'SPAWN_MELEE',        // 大啤酒: 近战单位
-  '3481':  'SPAWN_RANGE',        // 你最好看: 远程单位
-  '165':   'SPAWN_MAGIC',        // 棒棒糖: 魔法/控制单位
-  '2006':  'SPAWN_ELITE',        // 鲜花: 高级兵种
-  '2114':  'ADD_LOW_POWER',      // 奇幻礼花筒: 英雄+50全属性，普通单位+50血量，+30攻击力
+
+
+ // '463':   'ADD_INT',            // 小心心: 智力+1：英雄
+ // '164':   'ADD_STR',            // 抖音: 力量+1：英雄
+ // '3992':  'ADD_AGI',            // 人气票: 敏捷+1：英雄
+
+
+
+  '463':'ADD_HP' ,              //小心心：血量：+5
+  '164':  'ADD_ATT',            //抖音：攻击力+1
+  '3992':  'ADD_SPEED',            // 人气票: 移速+1
+  '2002':  'SPAWN_MELEE',        // 大啤酒: 近战单位x1
+  '3481':  'SPAWN_RANGE',        // 你最好看: 远程单位x1
+  '165':   'SPAWN_MAGIC',        // 棒棒糖: 魔法/控制单位x1
+  '3621':  'SPAWN_ELITE',        // 爱你呦: 高级兵种x4
+  '3597':  'SPAWN_SIEGE',        // 加油呀: 攻城单位x1
+  '2006':  'LEVEL_UP',        // 鲜花：召唤师提升一级
+  '781':  'ADD_MONEY',    // 比心: 获得 10000金币
+  '3620':  'CHANGE_SUMMONER',        // 送你花花:切换召唤师类型 
+  '685':   'TEAM_BUFF_SMALL',    // 粉丝团灯牌: 普通单位+10血量，+10攻击力,+1000金币
+  '3447':   'UNLOCK_TOWER',    // 亲吻: 随即解锁两座己方建筑
+  '2114':  'ADD_LOW_POWER',      // 奇幻礼花筒:普通单位+500血量，+100攻击力,+50移速
+
+
+
+  "5503":"SPAWN_ASSASSIN",    //黄桃罐头:五个刺客，直接出生在对面的基地旁边，攻击对面基地
+
   '3780':  'ADD_HIGHT_POWER',    // 比心兔兔: 英雄+100全属性，普通单位+100血量，+50攻击力
-  '3621':  'CHANGE_HERO',        // 爱你呦:切换召唤师类型 
   '5564':  'SUMMON_SIEGE',  // 闪耀星辰: 攻城单位+*10
-  '685':   'TEAM_BUFF_SMALL',    // 粉丝团灯牌: 英雄+10全属性，随机装备+1，普通单位+10血量，+10攻击力
-  '781':  'ADD_HIGHT_POWER',    // 比心: 获得 10000金币和木材
+
 };
-
-
+//经验+200
+//5元一座建筑
 
 // '3620':  'CHANGE_SUMMONER',     // 送你花花:  切换英雄化身 (ChangeHero)
   // --- 2. 中大型礼物 (战局逆转) ---
@@ -62,64 +84,77 @@ const GIFT_MAP: Record<string, string> = {
   //'3447':  'SUMMON_FROST_WYRM',  // 亲吻: 10x 冰霜巨龙
 
 
+export async function handleDanmu(msgs: DyMessage[]) {
+  // 1. 变量声明置顶
+  let userName: string | undefined;
+  let content: string | undefined;
+  let action: string | undefined;
+  let points: number | null;
 
-export function handleDanmu(msgs: DyMessage[]) {
-
-  msgs.forEach(msg => {
+  // 2. 使用 for...of 代替 forEach，以支持循环内的 await
+  for (const msg of msgs) {
     // ① 类型过滤
     if (!msg.method || !ALLOWED_METHODS.has(msg.method)) {
-      return;
+      continue;
     }
 
     // ② LIKE / GIFT 单独处理
     if (msg.method === CastMethod.LIKE) {
       handleLike(msg);
-      return;
+      continue;
     }
 
     if (msg.method === CastMethod.GIFT) {
       handleGift(msg);
-      return;
+      continue;
     }
 
     // ③ 只对 CHAT 解析命令
-if (msg.method !== CastMethod.CHAT) return;
-    
+    if (msg.method !== CastMethod.CHAT) continue;
 
-    const userName = msg.user?.name;
-    const content = msg.content?.trim();
-    if (!userName || !content) return;
+    userName = msg.user?.name;
+    content = msg.content?.trim();
+    if (!userName || !content) continue;
 
-    const action = COMMAND_MAP[content];
-    if (!action) return;
+    action = COMMAND_MAP[content];
+    if (!action) continue;
 
+    // 构建初始 DTO
     const safeMsg: DanmuCommandDTO = {
       realId: msg.user?.realId,
       user: userName,
       content: content,
       time: msg.time,
       command: action,
-      avatar: msg.user?.avatar, // 建议带上头像，Overlay可以用
+      avatar: msg.user?.avatar,
+      tierPoints: 0, // 默认初始值
     };
 
-    // --- 核心修改点：针对 1 和 2 的去重判断 ---
+    // --- 核心修改点：处理 1 和 2 的去重与分数获取 ---
     if (content === '1' || content === '2') {
-
-      const isAdded = addUniquePlay(safeMsg);
-      // 如果 Store 告诉我们该 ID 已存在，直接中断，不执行后续的 electronAPI
-      if (!isAdded) return; 
+      // 这里的 addUniquePlay 是异步的，等待后端返回分数
+      points = await addUniquePlay(safeMsg);
+      
+      // 如果返回 null，说明该 realId 已在列表中，直接跳过本次循环
+      if (points === null) {
+        console.warn(`[Handle] 玩家 ${userName} 已存在，跳过发送`);
+        continue;
+      }
+      
+      // 将异步拿到的真实分数赋值给 safeMsg
+      safeMsg.tierPoints = points;
     }
 
-    // 只有通过了上面的去重（或者是其他非1、2指令），才会执行 IPC 发送
+    // 只有新玩家或非 1/2 指令才会到达这里，执行 IPC 发送给主进程
     (window as any).electronAPI
       .addCommand(safeMsg, action)
       .then(() => {
-        console.log(`命令发送成功: ${userName} -> ${action}`);
+        console.log(`命令发送成功: ${userName} (积分: ${safeMsg.tierPoints}) -> ${action}`);
       })
       .catch((err: any) => {
         console.error('发送命令失败', err);
       });
-  });
+  }
 }
 
 
@@ -142,6 +177,38 @@ export function handleGift(msg: DyMessage) {
 
     const Msg: GifddDTO = {
       realId: msg.user?.realId,
+      user: userName,
+      time: msg.time,
+      command: action,
+      count:count
+    };
+    (window as any).electronAPI
+      .addGift(Msg)
+      .then(() => {
+        console.log('命令发送成功:', Msg);
+      })
+      .catch((err: any) => {
+        console.error('发送命令失败', err);
+      });
+ 
+}
+
+
+export function ManualGiveGift(msg: GifddDTO) {
+
+   const userName = msg.user;
+    const content = msg.giftId;
+    const count= msg.count;
+    console.log("msg",msg)
+    if (!userName || !content) return;
+
+    
+    const action = GIFT_MAP[content];
+    if (!action) return;
+
+
+    const Msg: GifddDTO = {
+      realId: msg.realId,
       user: userName,
       time: msg.time,
       command: action,

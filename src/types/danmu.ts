@@ -5,6 +5,9 @@ export interface DanmuCommandDTO {
   time?: number;
   command?: string;
   avatar?: string;
+  rankPoints?: number; // 新增：存储分数
+  tierPoints?: number; // 新增：段位分数
+  tier?:string //d段位名称
 }
 
 export interface GifddDTO {

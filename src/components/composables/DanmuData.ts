@@ -1,7 +1,7 @@
-// useDanmuStore.ts
 import { ref } from 'vue'
 import type { DyMessage } from '@/core/dycast'
 import type { DanmuCommandDTO } from "@/types/danmu";
+import { syncRank } from '@/api/player'
 
 const allCasts = ref<DyMessage[]>([])
 const mainCasts = ref<DyMessage[]>([])
@@ -11,29 +11,68 @@ const currentPlay = ref<DanmuCommandDTO[]>([])
 
 export function useDanmuStore() {
   
-  // 核心逻辑：判断 realId 是否已存在，不存在则存入并返回 true
-  function addUniquePlay(msg: DanmuCommandDTO): boolean {
-    if (!msg.realId) return false;
-    
-    // 检查 realId 是否已经在当前列表中
-    const isExist = currentPlay.value.some(item => item.realId === msg.realId);
-    console.log("msg.realId",msg.realId)
-    if (!isExist) {
-      currentPlay.value.push(msg);
+  // 辅助方法：将当前列表同步给 Electron (Overlay用)
+  const syncToElectron = () => {
+    const rawList = JSON.parse(JSON.stringify(currentPlay.value));
+    (window as any).electronAPI.syncCurrentPlay(rawList);
+  }
 
-      // 💡 关键：同步给主进程，主进程会转交给 Overlay
-      const rawList = JSON.parse(JSON.stringify(currentPlay.value));
-      (window as any).electronAPI.syncCurrentPlay(rawList);
-      console.log(`[Store] 玩家 ${msg.user} 成功加入 currentPlay`);
-      return true; // 表示是新玩家，可以执行后续逻辑
+  // 核心逻辑：判断 realId 是否已存在，不存在则存入并返回分数
+  async function addUniquePlay(msg: DanmuCommandDTO): Promise<number | null> {
+    // 变量声明置顶
+    let isExist: boolean;
+    let player: DanmuCommandDTO | undefined;
+    let rankPointsResult: number;
+
+    if (!msg.realId) return null;
+    
+    // 检查是否已在列表中
+    isExist = currentPlay.value.some(item => item.realId === msg.realId);
+    
+    if (!isExist) {
+      // 1. 先加入本地列表
+      currentPlay.value.push(msg);
+      
+      // 2. 立即同步一次（即使此时还没拿到分数，先让名字显示出来）
+      syncToElectron();
+      
+      try {
+        const res = await syncRank({
+          douyinUserId: msg.realId,
+          douyinName: msg.user,
+          gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D"
+        });
+
+        if (res.data.success) {
+          // 3. 更新本地存储中的分数和段位
+          player = currentPlay.value.find(p => p.realId === msg.realId);
+          if (player) {
+            player.rankPoints = res.data.rankPoints;
+            player.tierPoints = res.data.tierPoints;
+            player.tier = res.data.tier; // 建议也存下段位文字
+          }
+          
+          // 4. 数据更新后，再次同步给 Overlay
+          syncToElectron();
+          
+          return res.data.rankPoints;
+        }
+      } catch (err) {
+        console.error("同步失败", err);
+      }
+      
+      // 如果 API 失败，返回 0 分作为默认值
+      return 0; 
     }
-    console.log("currentPlay",currentPlay)
-    console.warn(`[Store] 玩家 ${msg.user} (ID: ${msg.realId}) 已在列表中，跳过`);
-    return false; // 表示已存在
+    
+    // 玩家已存在，返回 null
+    console.warn(`[Store] 玩家 ${msg.user} 已在列表中`);
+    return null; 
   }
 
   function clearCurrentPlay() {
     currentPlay.value = [];
+    syncToElectron(); // 清空时也同步一下
     console.log("[Store] currentPlay 已清空");
   }
 
@@ -53,7 +92,7 @@ export function useDanmuStore() {
     allCasts,
     mainCasts,
     otherCasts,
-    currentPlay, // 导出供组件使用
+    currentPlay,
     appendCasts,
     clearDanmu,
     addUniquePlay,

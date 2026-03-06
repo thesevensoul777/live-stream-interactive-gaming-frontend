@@ -123,9 +123,12 @@ async function waitUntilFileReadyByPath(filePath, intervalMs = 100) {
 export async function saveCommand(payload) {
     try {
 
+  const tPoints = payload.msg.tierPoints ?? 0; 
+        
         const fullText = `|realId=${tool.encodeValue(payload.msg.realId)}|` +
                          `*user=${tool.encodeValue(payload.msg.user)}|` +
-                         `*command=${tool.encodeValue(payload.action)}`;
+                         `*command=${tool.encodeValue(payload.action)}|` + 
+                         `*tierPoints=${tool.encodeValue(tPoints)}`; // 使用处理后的变量
    
         await writeToWarcraftQueue(CommandPath, fullText);
         return { ok: true };
@@ -241,9 +244,7 @@ export async function launchWarcraft(gamePath) {
     // 动态计算：宽度 70%，高度 99%
     const targetWidth = Math.floor(screenW * 0.8);
     const targetHeight = Math.floor(screenH * 1);
-    const posX = Math.floor((screenW - targetWidth) / 2);
-    const posY = Math.floor((screenH - targetHeight) / 2);
-    
+
     const dllFiles = [
         'd3d8.dll', 'scriptrunner.dll', 'SlkLib.dll', 'luacore.dll', 
         'yd_size_limit.dll', 'yd_jass_api.dll', 'ydbase.dll', 
@@ -371,6 +372,29 @@ function startWar3ExitMonitor(gamePath, dllFiles) {
 
 
 
+/**
+ * 将魔兽原始字符串解析为键值对对象
+ * 输入: |realId=123|*rank=5|*score=0
+ * 输出: { realId: "123", rank: "5", score: "0" }
+ */
+function parsePlayerData(rawString) {
+    // --- 变量声明置顶 ---
+    const result = {};
+    const parts = rawString.split('|');
+    let key = '';
+    let val = '';
+
+    parts.forEach(part => {
+        if (part.includes('=')) {
+            [key, val] = part.split('=');
+            // 去掉 key 开头的 * 号，并存入对象
+            result[key.replace(/^\*/, '')] = val;
+        }
+    });
+    return result;
+}
+
+
 
 // 假设你在某个地方启动了这个监听
 /**
@@ -382,34 +406,43 @@ async function handleGameEnd(gamePath) {
     const summaryFile = path.join(gamePath, 'GameData', 'TerritoryWars', 'Summary-2147483648');
     let results = [];
     let isWar3Running = true;
+    let formattedData = {};
 
     console.log("[Summary] 启动结算自动监听重载流程...");
 
     // 只要魔兽还在运行，就持续监听结算文件
     while (isWar3Running) {
-        // 等待一局游戏的结算数据
+        // 等待一局游戏的结算数据 (返回的是字符串数组)
         results = await watchGameSummary(summaryFile);
 
         if (results && results.length > 0) {
-            console.log(`[Summary] 捕获到 ${results.length} 名玩家结算，准备上传...`);
+            console.log(`[Summary] 捕获到 ${results.length} 名玩家结算，开始格式化并上传...`);
             
-            // 异步处理上传，不要阻塞监听下一局
-            results.forEach(playerData => {
-                // 这里调用你的数据库接口，例如：
-                // apiService.uploadPlayerScore(playerData).catch(e => console.error("上传失败", e));
-                console.log("上报数据内容:", playerData);
-            });
+            for (const rawPlayerStr of results) {
+                // 1. 将字符串转为对象
+                formattedData = parsePlayerData(rawPlayerStr);
+                
+                console.log("准备存入数据库的对象:", formattedData);
+
+                // 2. 调用数据库接口
+                // 这里建议使用 try-catch 防止单个上传失败影响整体
+                try {
+                    // 假设你的上传方法是这样：
+                    // await axios.post('你的API地址', formattedData);
+                    console.log(`[DB] 玩家 ${formattedData.realId} 数据上传成功`);
+                } catch (dbErr) {
+                    console.error(`[DB Error] 玩家 ${formattedData.realId} 上传失败:`, dbErr.message);
+                }
+            }
         }
 
-        // 检查魔兽是否还在运行（通过简单的进程检测）
-        // 如果魔兽关了，跳出循环，结束监听任务
+        // 检查魔兽是否还在运行
         isWar3Running = await new Promise(resolve => {
             exec('tasklist /FI "IMAGENAME eq war3.exe"', (err, stdout) => {
                 resolve(stdout.toLowerCase().includes('war3.exe'));
             });
         });
         
-        // 稍微喘息一下，防止 CPU 过高
         await new Promise(r => setTimeout(r, 2000));
     }
     console.log("[Summary] 魔兽已关闭，结算监听任务自然结束。");
@@ -494,20 +527,7 @@ export async function watchGameSummary(summaryPath) {
 
 
 
-// --- 辅助函数：清理 DLL ---
-function cleanupDLLs(gamePath, dllFiles) {
-    console.log('[Cleanup] 正在从魔兽目录删除插件 DLL...');
-    dllFiles.forEach(file => {
-        const target = path.join(gamePath, file);
-        if (fs.existsSync(target)) {
-            try {
-                fs.unlinkSync(target);
-            } catch (e) {
-                console.error(`无法删除 ${file}, 可能文件被占用`);
-            }
-        }
-    });
-}
+
 
 // --- 锁机制 ---
 async function acquireFileLock(filePath) {

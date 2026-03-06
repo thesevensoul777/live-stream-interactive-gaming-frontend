@@ -52,22 +52,35 @@
   </div>
 </div>
     <div class="row">
-        <div class="field">
+        <div class="field field-player">
       <select v-model="player">
-        <option v-for="p in players" :key="p" :value="p">{{ p }}</option>
+        <option value="" disabled>选择玩家</option>
+     <option 
+      v-for="p in currentPlay" 
+      :key="p.realId" 
+      :value="p.realId"
+    >
+      {{ p.user }}
+    </option>
       </select>
         </div>
 
-          <div class="field">
-      <input v-model.number="count" type="number" placeholder="弹幕数量" />
+          <div class="field field-count">
+      <input v-model.number="count" type="number" placeholder="数量" />
           </div>
 
- <div class="field">
-
-    <select v-model="gift">
-        <option v-for="g in gifts" :key="g">{{ g }}</option>
-      </select>
- </div>
+<div class="field field field-gift">
+  <span class="label">选择礼物：</span>
+  <select v-model="gift" style="width: 260px;">
+    <option 
+      v-for="(val, key) in GIFT_NAME_MAP" 
+      :key="key" 
+      :value="key"
+    >
+      {{ val }}
+    </option>
+  </select>
+</div>
 
 
   
@@ -102,17 +115,17 @@ import { RelayCast } from '@/core/relay';
 import { injectWar3} from '@/core/actionRequests';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { useAuthStore } from '@/stores/auth'
-import { handleDanmu } from '@/core/actionRequests';
+import { handleDanmu,ManualGiveGift } from '@/core/actionRequests';
 import { runDanmuTest } from '@/test/testMock';
-
+import type { GifddDTO } from "@/types/danmu";
 
 const authStore = useAuthStore()
 const testTimer = ref<any>(null);
-
+const ManualGiveGiftData= ref<GifddDTO>();
 
 const user = computed(() => authStore.user)
 
-const { appendCasts, clearDanmu } = useDanmuStore()
+const { appendCasts, clearDanmu,currentPlay } = useDanmuStore()
 
 // 状态
 // 连接状态
@@ -128,12 +141,26 @@ const userCount = ref<string | number>('*****');
 const likeCount = ref<string | number>('*****');
 
 // 玩家 / 礼物
-const player = ref<string>('电脑玩家A')
+const player = ref<string>('')
 const count = ref<number>(1)
-const gift = ref<string>('玫瑰')
+const gift = ref<string>('463');
 
-const players: string[] = ['电脑玩家A', '电脑玩家B']
-const gifts: string[] = ['玫瑰', '飞机', '火箭']
+const GIFT_NAME_MAP: Record<string, string> = {
+  '463':  '小心心（血量：+5）',
+  '164':  '抖音（攻击力+1）',
+  '3992': '人气票（移速+1）',
+  '2002': '大啤酒（近战单位x1）',
+  '3481': '你最好看（远程单位x1）',
+  '165':  '棒棒糖（魔法/控制单位x1）',
+  '3621': '爱你呦（高级兵种x4）',
+  '3597': '加油呀（攻城单位x1）',
+  '2006': '鲜花（召唤师提升一级）',
+  '781':  '比心（获得 10000金币）',
+  '3620': '送你花花（切换召唤师类型）',
+  '685':  '粉丝团灯牌（团队小增益）',
+  '3447': '亲吻（随机解锁两座建筑）',
+  '2114': '奇幻礼花筒（团队大增益）'
+};
 
 // 其它弹幕
 const otherRef = useTemplateRef('otherEl');
@@ -362,9 +389,29 @@ const disconnectLive = function () {
 
 
 
-
 function send(): void {
-  console.log('send gift', player.value, gift.value, count.value)
+  // 1. 校验输入
+  if (!player.value) {
+    alert("请选择目标玩家");
+    return;
+  }
+
+  // 2. 从 currentPlay 查找选中玩家的完整信息（为了获取 realId）
+  const targetPlayer = currentPlay.value.find(p => p.realId === player.value);
+  
+  // 3. 构造 GifddDTO 格式的数据
+  const payload: any = {
+    realId: player.value , 
+    user: targetPlayer?.user|| 'manual-send',                           // 对应函数里的 msg.user
+    giftId: gift.value,                           // 对应函数里的 msg.giftId (即 463 等 ID)
+    count: count.value,                           // 对应函数里的 msg.count
+    time: new Date().toLocaleTimeString(),        // 时间戳
+  };
+ debugger;
+  // 4. 调用接口
+  ManualGiveGift(payload);
+  
+  console.log('已执行补送:', payload);
 }
 
 function openOverlay() {
@@ -464,4 +511,20 @@ button.confirmed {
   width: 7rem;
 }
 
+.field-player {
+  width: 15%;
+}
+.field-count {
+  width:10%;
+}
+.field-gift {
+  /* 礼物框通常比较长 */
+  width: 30%; 
+}
+
+/* 确保内部的 select 和 input 自动撑满 field 的宽度 */
+.field select, 
+.field input {
+  width: 100%;
+}
 </style>

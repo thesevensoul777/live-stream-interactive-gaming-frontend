@@ -1,8 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-console.log('preload1111');
-
-
 /* ================= Files And File folder ================= */
 
 contextBridge.exposeInMainWorld('fileAPI', {
