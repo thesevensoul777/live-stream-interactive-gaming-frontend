@@ -35,7 +35,6 @@ export function useDanmuStore() {
       
       // 2. 立即同步一次（即使此时还没拿到分数，先让名字显示出来）
       syncToElectron();
-      
       try {
         const res = await syncRank({
           douyinUserId: msg.realId,

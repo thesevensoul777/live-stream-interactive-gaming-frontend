@@ -57,7 +57,6 @@ class WindowManager {
         nodeIntegration: false
       }
     });
-
     // Handle routing for Vue/React/Vite
     const url = process.env.VITE_DEV_SERVER_URL 
       ? `${process.env.VITE_DEV_SERVER_URL}#/overlay`
