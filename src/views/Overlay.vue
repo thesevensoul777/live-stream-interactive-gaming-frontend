@@ -10,16 +10,20 @@
         :class="['rank-slot', `rank-${index + 1}`]"
       >
         <div class="avatar-box">
-          <div v-if="index === 0" class="gold-glow"></div>
-          
-          <img :src="user.avatarUrl || user.avatar || defaultAvatar" class="avatar-img" />
-          
-          <span class="rank-tag">{{ index + 1 }}</span>
+      <img 
+    v-if="index < 3" 
+    :src="RANK_FRAMES[index]" 
+    class="rank-frame-webp" 
+  />
+  
+  <img :src="user.avatarUrl || user.avatar || defaultAvatar" class="avatar-img" />
+  
+
         </div>
 
         <div class="user-meta">
           <div class="nickname">{{ user.douyinName || user.nickname || 'Unknown' }}</div>
-          <div class="score">{{ user.rankPoints || user.totalScore || 0 }} pts</div>
+        <div class="score">{{ formatNumber(user.rankPoints || user.totalScore) }}</div>
         </div>
       </div>
 
@@ -34,17 +38,19 @@
     <transition name="zoom">
       <div v-if="showRankList" class="full-rank-overlay">
         <div class="rank-panel">
-          <div class="panel-header">🏆 战功赫赫 (月度 TOP 20)</div>
+          <div class="panel-header">🏆 世界排行榜</div>
           <div class="list-body">
             <div v-for="(item, i) in fullRanks" :key="i" class="list-item">
               <span class="num">{{ i + 1 }}</span>
               <img :src="item.avatarUrl || item.avatar || defaultAvatar" />
               <span class="name">{{ item.douyinName || item.nickname }}</span>
+              <span class="kills">⚔️ {{ formatNumber(item.kills) || 0 }}</span>
+  <span class="tier">🛡️ {{ item.tier || '青铜5' }}</span>
               <span class="points">{{ item.rankPoints || item.totalScore }}</span>
             </div>
           </div>
-          <div class="panel-footer">松开 TAB 返回游戏</div>
-        </div>
+         <!-- <div class="panel-footer">松开 TAB 返回游戏</div> -->
+        </div>  
       </div>
     </transition>
   </div>
@@ -56,6 +62,9 @@ import { useDanmuStore } from '@/components/composables/DanmuData'
 import GiftSlideNotify from '@/components/giftSlide/GiftSlideNotify.vue'
 import type { GifddDTO, LikeDTO } from "@/types/danmu"
 import * as PlayerAPI from '@/api/player'
+import rank1Frame from '@/assets/ranks/1.webp'
+import rank2Frame from '@/assets/ranks/2.webp'
+import rank3Frame from '@/assets/ranks/3.webp'
 
 // --- 变量声明置顶 ---
 const { currentPlay } = useDanmuStore()
@@ -68,7 +77,7 @@ const showRankList = ref(false)
 const topThree = ref<any[]>([])
 const fullRanks = ref<any[]>([])
 let cleanup: any = null
-
+const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
 // --- 逻辑：获取接口排行榜 (带容错) ---
 const fetchLeaderboard = async () => {
   if (typeof PlayerAPI.getMonthlyLeaderboard !== 'function') return;
@@ -82,32 +91,86 @@ const fetchLeaderboard = async () => {
     console.warn("排行榜请求失败，保持当前状态");
   }
 }
+const GIFT_ACTION_DESC: Record<string, string> = {
+  'ADD_HP': '血量+5',
+  'ADD_ATT': '攻击力+1',
+  'ADD_SPEED': '移速+1',
+  'SPAWN_MELEE': '近战单位x1',
+  'SPAWN_RANGE': '远程单位x1',
+  'SPAWN_MAGIC': '魔法/控制单位x1',
+  'SPAWN_ELITE': '高级兵种x4',
+  'SPAWN_SIEGE': '攻城单位x1',
+  'LEVEL_UP': '召唤师提升一级',
+  'ADD_MONEY': '获得 10000金币',
+  'CHANGE_SUMMONER': '切换召唤师类型',
+  'TEAM_BUFF_SMALL': '团队小增益',
+  'UNLOCK_TOWER': '随机解锁两座建筑',
+  'ADD_LOW_POWER': '团队大增益',
+};
+
+// --- 变量声明置顶 ---
+const formatNumber = (num: number | string): string => {
+  const n = Number(num) || 0;
+  if (n < 10000) return n.toString();
+  
+  // 超过1W的处理：保留两位小数并去掉末尾多余的0
+  // 例如：1.50W -> 1.5W, 1.51W -> 1.51W
+  const w = n / 10000;
+  return w.toFixed(2).replace(/\.?0+$/, "") + 'W';
+};
 
 // --- 核心业务：拦截与分发 ---
 const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
   const data = payload.detail || payload;
-  if (payload.ranks) {
-    fullRanks.value = payload.ranks;
-    topThree.value = payload.ranks.slice(0, 3);
+
+
+  // 获取 realId 并匹配玩家
+  const realId = data.realId || data.senderId; 
+  if (!realId) return;
+  
+ const player = currentPlay.value.find(p => p.realId === realId);
+// if (!player) return;
+
+  // 核心逻辑：根据类型定制内容
+  let displayContent = '';
+  let displayCount = data.count || 1;
+  let label = '';
+
+  if (type === 'LIKE') {
+    // 点赞固定播报
+    label = '点赞了';
+    displayContent = '获得 10 经验和 5 金币';
+    displayCount = data.likeCount || 1;
+  } else if (type === 'GIFT') {
+    // 礼物根据 ID 匹配功能描述
+    label = '获得了';
+    const giftCommand = data.command; 
+    const effectDesc = GIFT_ACTION_DESC[giftCommand] || '未知力量';
+    displayContent = `${effectDesc}`; 
+    displayCount = data.count || 1;
   }
 
-  if (!data.realId) return;
-  const player = currentPlay.value.find(p => p.realId === data.realId);
-  if (!player) return;
-
+  // 构造通知对象
   const notification = {
     id: `${type.toLowerCase()}-${Date.now()}-${Math.random()}`,
     type,
-    user: data.user || player.user,
-    avatar: data.avatar || player.avatar,
-    label: type === 'GIFT' ? '送出' : '点赞了',
-    content: type === 'GIFT' ? (data.giftName || '礼物') : '直播间',
-    count: type === 'GIFT' ? (data.count || 1) : (data.likeCount || 1)
+    user: data.user || data.senderName || player?.user,
+    avatar: data.avatar || player?.avatar,
+    label: label,
+    content: displayContent,
+    count: displayCount
   }
 
-  if (player.content === '1') leftNotify.value?.push(notification);
-  else if (player.content === '2') rightNotify.value?.push(notification);
+  // 根据玩家阵营/位置推送
+  if (player?.content === '1') {
+    leftNotify.value?.push(notification);
+  } else {
+    rightNotify.value?.push(notification);
+  }
 }
+
+
+
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'Tab') {
@@ -146,7 +209,6 @@ onUnmounted(() => {
   if (cleanup) cleanup();
 })
 </script>
-
 <style scoped>
 /* 绿幕底层固化 */
 .permanent-green-bg {
@@ -170,7 +232,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: flex-end; 
   /* 调大 gap 或者取消 gap 改用宽度平分 */
-  gap: 20px; 
+  gap: 0px; 
   padding: 40px 15px 20px 15px;
   background: rgba(0, 0, 0, 0.5) !important;
   backdrop-filter: blur(8px);
@@ -202,7 +264,24 @@ onUnmounted(() => {
 }
 
 /* --- 保持之前的排序逻辑 --- */
-.rank-1 { order: 2; transform: translateY(-20px) scale(1.1); z-index: 10; width: 140px; /* 第一名可以稍微再宽一点 */}
+/* --- 第一名头像与相框专项调大 --- */
+.rank-1 .avatar-img { 
+  width: 70px;  /* 从 50px 增加到 70px */
+  height: 70px; 
+}
+
+.rank-1 .rank-frame-webp {
+  /* 因为头像变大了，相框的 inset 和尺寸也要同步调整 */
+  inset: -20px; 
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+}
+.rank-1 { 
+  order: 2; 
+  transform: translateY(-25px); /* 稍微再往上提一点，更有立体感 */
+  z-index: 10; 
+  width: 160px; /* 从 140px 增加到 160px */
+}
 .rank-2 { order: 1; transform: translateY(-5px); }
 .rank-3 { order: 3; transform: translateY(5px); }
 .rank-3 .avatar-img { border: 2px solid #CD7F32; }
@@ -211,15 +290,34 @@ onUnmounted(() => {
 .avatar-box { position: relative; }
 .avatar-img { width: 50px; height: 50px; border-radius: 50%; background: #222; }
 
-/* 金色流光特效 */
-.gold-glow {
-  position: absolute;
-  inset: -10px;
-  background: conic-gradient(from 0deg, gold, transparent, gold, transparent, gold);
-  border-radius: 50%;
-  animation: rotate 3s linear infinite;
-  z-index: -1;
+
+/* --- 修正后的关键帧动画 --- */
+@keyframes frame-subtle-pulse {
+  from { 
+    transform: scale(1); 
+    /* 保持滤镜连写，否则会互相覆盖 */
+    filter: brightness(1) drop-shadow(0 0 8px rgba(255, 215, 0, 0.3)); 
+  }
+  to { 
+    transform: scale(1.02); 
+    filter: brightness(1.3) drop-shadow(0 0 15px rgba(255, 215, 0, 0.6)); 
+  }
 }
+
+/* --- 修正后的类定义 --- */
+.rank-frame-webp {
+  position: absolute;
+  inset: -15px; 
+  width: calc(100% + 30px);
+  height: calc(100% + 30px);
+  z-index: 2;
+  pointer-events: none;
+  /* 初始滤镜状态 */
+  filter: brightness(1) drop-shadow(0 0 8px rgba(255, 215, 0, 0.3));
+  /* 引用修正后的动画 */
+  animation: frame-subtle-pulse 2s ease-in-out infinite alternate;
+}
+
 
 @keyframes rotate { to { transform: rotate(360deg); } }
 
@@ -259,11 +357,71 @@ onUnmounted(() => {
   border-radius: 15px;
   overflow: hidden;
 }
-.panel-header { padding: 15px; background: #222; color: gold; font-weight: bold; text-align: center; }
-.list-body { max-height: 400px; overflow-y: auto; }
-.list-item { display: flex; align-items: center; padding: 12px 25px; border-bottom: 1px solid #222; color: white; }
-.list-item img { width: 35px; height: 35px; border-radius: 50%; margin: 0 15px; }
-.list-item .points { margin-left: auto; color: gold; }
+/* 标题头：缩小高度 */
+.panel-header { 
+  padding: 10px; /* 从 15px 缩小到 10px */
+  background: #222; 
+  color: gold; 
+  font-weight: bold; 
+  text-align: center; 
+  font-size: 14px; /* 稍微缩小字体 */
+}
 
-.zoom-enter-from { opacity: 0; transform: scale(0.9); }
+/* 列表主体：保持高度限制 */
+.list-body { 
+  max-height: 400px; 
+  overflow-y: auto; 
+  background: #111; 
+}
+
+/* 列表项：压缩垂直内边距 */
+.list-item { 
+  display: flex; 
+  align-items: center; 
+  padding: 6px 15px; /* 垂直方向从 12px 压缩到 6px，水平从 25px 缩到 15px */
+  border-bottom: 1px solid #222; 
+  color: white; 
+  font-size: 13px; /* 整体字号微调 */
+}
+
+/* 头像：稍微缩小并收紧间距 */
+.list-item img { 
+  width: 30px; /* 从 35px 缩小到 30px */
+  height: 30px; 
+  border-radius: 50%; 
+  margin: 0 10px; /* 从 15px 缩小到 10px */
+}
+
+/* 排名序号 */
+.list-item .num {
+  width: 25px;
+  color: #888;
+  font-size: 12px;
+}
+
+/* 名字：由于增加了新字段，给名字设定基础比例 */
+.list-item .name {
+  flex: 1.5; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 击杀与段位：水平平分空间，间距紧凑 */
+.list-item .kills,
+.list-item .tier {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* 战功分数：靠右并微调间距 */
+.list-item .points { 
+  flex: 1;
+  text-align: right;  
+  color: gold; 
+  font-weight: bold;
+}
+
+.zoom-enter-from { opacity: 0; transform: scale(0.9); }       
 </style>

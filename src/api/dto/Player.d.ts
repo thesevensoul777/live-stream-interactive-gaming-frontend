@@ -48,3 +48,17 @@ export interface GameSummaryResponse {
   message?: string;
   processed?: number;
 }
+
+/**
+ * 6. 排行榜单项：用于渲染你那个炫酷的金色相框列表
+ */
+export interface LeaderboardItem {
+  rank: number;        // 排名：1-20
+  douyinName: string;
+  douyinUserId: string;
+  avatarUrl: string;
+  kills: number;
+  rankPoints: number;
+  tierPoints: number;
+  tier: string;        // 段位描述
+}

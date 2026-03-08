@@ -57,10 +57,10 @@ onMounted(async () => {
 /* 撑满全屏，左右布局 */
 .main-layout {
   display: flex;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   background-color: #ffffff; /* 管理后台保持简洁白色背景 */
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* 右侧内容容器 */

@@ -1,24 +1,26 @@
 <template>
   <div class="panel">
-<div class="row">
-  <!-- 弹幕状态 -->
-  <div class="field">
-    <span class="label">弹幕状态：</span>
-    <span :class="connectStatus==1 ? 'connected' : 'disconnected'">
-      {{ connectStatus==1 ? '已连接' : '未连接' }}
-    </span>
-  </div>
 
+    <div class="status-bar">
+      <div class="field">
+        <span class="label">弹幕状态：</span>
+        <span :class="connectStatus == 1 ? 'connected' : 'disconnected'">
+          {{ connectStatus == 1 ? '已连接' : '未连接' }}
+        </span>
+      </div>
+    </div>
+
+<div class="row">
   <!-- 抖音号 -->
   <div class="field">
-    <span class="label">抖音号：</span>
+    <span class="label">1.抖音号：</span>
       <input class="field-input" v-model="douyinId" placeholder="抖音号" />
     <!-- <span class="text">{{ douyinId }}</span> -->
   </div>
 
   <!-- 秘钥 -->
   <div class="field">
-    <span class="label">秘钥：</span>
+    <span class="label">2.秘钥：</span>
     <input class="field-input" v-model="secret" placeholder="秘钥" />
   </div>
 
@@ -31,20 +33,20 @@
       :class="{'confirmed': confirmed}"
       @click="chooseFolder"
     >
-      {{ buttonText }}
+      {{"3."+ buttonText }}
     </button>
     <button
       :class="connectStatus ==1 ? 'btn-running' : ''"
       @click="toggleListen"
     >
-      {{ connectStatus==1 ? '监听中' : '启动监听' }}
+      {{ connectStatus==1 ? '5.监听中' : ' 4.启动监听' }}
     </button>
     <button 
   class="btn-launch" 
   :disabled="!path" 
   @click="launchGame"
 >
-   启动游戏
+ 6.启动游戏
 </button>
 
 
@@ -66,7 +68,13 @@
         </div>
 
           <div class="field field-count">
-      <input v-model.number="count" type="number" placeholder="数量" />
+  <input 
+  v-model.number="count" 
+  type="number" 
+  min="1" 
+  placeholder="数量" 
+  @input="handleInput"
+/>
           </div>
 
 <div class="field field field-gift">
@@ -85,11 +93,11 @@
 
   
   <div class="actions">
-        <button 
+        <!-- <button 
   @click="toggleTest"
 >
   测试礼物
-</button>
+</button> -->
 <button @click="send">补送</button>
 <button @click="openOverlay">开启特效</button>
   </div>
@@ -181,6 +189,14 @@ const buttonText = ref('游戏文件夹')
 // 弹幕客户端
 let castWs: DyCast | undefined
 const castSet: Set<string> = new Set()
+
+const handleInput = (e: Event) => {
+  // 1. 如果用户删空了或者输入了非数字，暂时不处理(允许删除)
+  // 2. 如果输入的值小于 1，直接强制修正为 1
+  if (count.value !== null && count.value < 1) {
+    count.value = 1;
+  }
+};
 
 function toggleListen(): void {
   if (connectStatus.value!=0) {
@@ -446,7 +462,8 @@ onMounted(() => {
           douyinUserId: item.douyinUserId,
           rankPoints: item.RankPoints, // 注意：这里的 Key 要和魔兽传出的对应
           tierPoints: item.TierPoints,
-          kills: item.Kills
+          kills: item.Kills,
+          consumption:item.Consumption
         }))
       };
 
@@ -565,4 +582,30 @@ button.confirmed {
 .field input {
   width: 100%;
 }
+
+/* 新增：第一行状态条样式 */
+.status-bar {
+  display: flex;
+  justify-content: center; /* 水平居中 */
+  align-items: center;
+  padding: 10px 0;
+  margin-bottom: 15px;      /* 与下方内容的距离 */
+  border-bottom: 1px solid #eee; /* 可选：加一条淡淡的分割线 */
+  font-size: 20px;          /* 状态文字可以稍微大一点，显眼 */
+}
+
+/* 状态文字间距微调 */
+.status-bar .field {
+  gap: 10px;
+}
+
+/* 保持你原本的 .row 样式不变 */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 10px;
+}
+
+/* ... 其它样式保持不变 ... */
 </style>

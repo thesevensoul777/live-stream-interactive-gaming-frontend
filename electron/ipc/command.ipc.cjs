@@ -14,6 +14,7 @@ ipcMain.handle('add-command', (event, payload) => {
   data.push({
     msg: payload.msg,
     action: payload.action,
+    tierPoints:payload.tierPoints,
     time: Date.now(),
   })
 

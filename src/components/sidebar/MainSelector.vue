@@ -5,16 +5,16 @@
       :class="{ active: active === 'war3' }"
       @click="$emit('change', 'war3')"
     >
-      魔兽争霸
+      军团大战
     </div>
-
+<!-- 
     <div
       class="item"
       :class="{ active: active === 'sc' }"
       @click="$emit('change', 'sc')"
     >
       星际争霸
-    </div>
+    </div> -->
   </div>
 </template>
 
@@ -30,7 +30,7 @@ defineEmits<{
 
 <style scoped>
 .sidebar {
-  width: 200px;
+  width: 10%;
   background: #1f1f1f;
   color: #fff;
   padding: 10px;
