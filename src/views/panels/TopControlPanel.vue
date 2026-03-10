@@ -79,7 +79,7 @@
   <span class="label">选择礼物：</span>
   <select v-model="gift" style="width: 260px;">
     <option 
-      v-for="(val, key) in GIFT_NAME_MAP" 
+      v-for="(val, key) in LW_GIFT_NAME_MAP" 
       :key="key" 
       :value="key"
     >
@@ -127,12 +127,18 @@ import { runDanmuTest } from '@/test/testMock';
 import type { GifddDTO } from "@/types/danmu";
 import type { GameSummaryRequest } from '@/api/dto/Player'
 import { postGameSummary } from '@/api/player'
+import { 
+  LW_GIFT_NAME_MAP
+} from "@/constants";
+import { useCrossWindowSync } from '@/components//composables/useCrossWindowSync';
+import { SYNC_CHANNELS } from '@/constants/syncChannels';
 
 const authStore = useAuthStore()
 const testTimer = ref<any>(null);
 const ManualGiveGiftData= ref<GifddDTO>();
 let stopListening: () => void;
 const user = computed(() => authStore.user)
+const { sync: syncUser } = useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE);
 
 const { appendCasts, clearDanmu,currentPlay } = useDanmuStore()
 
@@ -155,22 +161,7 @@ const count = ref<number>(1)
 const gift = ref<string>('463');
 const robotCount = ref<number>(0)
 
-const GIFT_NAME_MAP: Record<string, string> = {
-  '463':  '小心心（血量：+5）',
-  '164':  '抖音（攻击力+1）',
-  '3992': '人气票（移速+1）',
-  '2002': '大啤酒（近战单位x1）',
-  '3481': '你最好看（远程单位x1）',
-  '165':  '棒棒糖（魔法/控制单位x1）',
-  '3621': '爱你呦（高级兵种x4）',
-  '3597': '加油呀（攻城单位x1）',
-  '2006': '鲜花（召唤师提升一级）',
-  '781':  '比心（获得 10000金币）',
-  '3620': '送你花花（切换召唤师类型）',
-  '685':  '粉丝团灯牌（团队小增益）',
-  '3447': '亲吻（随机解锁两座建筑）',
-  '2114': '奇幻礼花筒（团队大增益）'
-};
+
 
 // 其它弹幕
 const otherRef = useTemplateRef('otherEl');
@@ -333,6 +324,7 @@ const handleMessages = function (msgs: DyMessage[]) {
         case CastMethod.MEMBER:
           newCasts.push(msg);
           otherCasts.push(msg);
+          syncUser(msg);
           setRoomCount(msg.room);
           break;
         case CastMethod.SOCIAL:
@@ -364,6 +356,7 @@ const handleMessages = function (msgs: DyMessage[]) {
   allCasts.push(...newCasts);
    handleDanmu(newCasts);
 
+   //syncUser();
   appendCasts(allCasts, mainCasts, otherCasts)
   if (relayWs && relayWs.isConnected()) {
     relayWs.send(JSON.stringify(msgs));

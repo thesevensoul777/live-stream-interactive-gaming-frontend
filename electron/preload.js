@@ -11,23 +11,15 @@ contextBridge.exposeInMainWorld('fileAPI', {
 /* ================= JWT Token Storage ================= */
 let authToken = null;
 
-contextBridge.exposeInMainWorld('auth', {
-  /**
-   * Set the JWT token after login
-   * @param token string
-   */
-   setToken: (token) => {
-    // store locally in renderer
-    ipcRenderer.send('auth:setToken', token); // send to main process
-  },
-  /**
-   * Get the stored JWT token
-   */
-   getToken: () => null
-});
+
+
+
 
 /* ================= Existing Electron API ================= */
 contextBridge.exposeInMainWorld('electronAPI', {
+
+
+  
 // 1. 修改为 invoke，确保主窗口知道同步成功
   syncCurrentPlay: (players) => ipcRenderer.invoke('sync-players-to-main', players),
 
@@ -81,7 +73,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   fetchLiveBinary: (url) =>
     ipcRenderer.invoke('api:fetch-binary', url),
+
+  sendData: (channel, data) => {
+    ipcRenderer.send(channel, data);
+  },
+   onReceiveData: (channel, callback) => {
+    // 移除旧监听，防止叠加
+    ipcRenderer.removeAllListeners(channel);
+    // 注册新监听
+    ipcRenderer.on(channel, (_event, value) => {
+      if (typeof callback === 'function') {
+        callback(value);
+      }
+    });
+  }
+
 });
+
+
+
 
 /* ================= Buffer Service Bridge ================= */
 contextBridge.exposeInMainWorld('buffer', {

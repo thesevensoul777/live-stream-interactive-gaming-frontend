@@ -24,10 +24,10 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 // 导入组件
-import MainSelector from '@/components/sidebar/MainSelector.vue'
-import TopControlPanel from '@/components/panels/TopControlPanel.vue'
-import DanmuList from '@/components/panels/DanmuList.vue'
-import RecordTable from '@/components/panels/RecordTable.vue'
+import MainSelector from '@/views/sidebar/MainSelector.vue'
+import TopControlPanel from '@/views/panels/TopControlPanel.vue'
+import DanmuList from '@/views/panels/DanmuList.vue'
+import RecordTable from '@/views/panels/RecordTable.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()

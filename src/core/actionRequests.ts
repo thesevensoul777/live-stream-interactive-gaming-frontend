@@ -86,7 +86,7 @@ export async function handleDanmu(msgs: DyMessage[]) {
     (window as any).electronAPI
       .addCommand(safeMsg, action)
       .then(() => {
-        console.log(`命令发送成功: ${userName} (积分: ${safeMsg.tierPoints}) -> ${action}`);
+    //    console.log(`命令发送成功: ${userName} (积分: ${safeMsg.tierPoints}) -> ${action}`);
       })
       .catch((err: any) => {
         console.error('发送命令失败', err);

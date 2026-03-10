@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useDanmuStore } from '@/components/composables/DanmuData'
-import GiftSlideNotify from '@/components/giftSlide/GiftSlideNotify.vue'
+import GiftSlideNotify from '@/views/giftSlide/GiftSlideNotify.vue'
 import type { GifddDTO, LikeDTO } from "@/types/danmu"
 import * as PlayerAPI from '@/api/player'
 import rank1Frame from '@/assets/ranks/1.webp'
@@ -68,6 +68,8 @@ import rank3Frame from '@/assets/ranks/3.webp'
 import { 
   LW_GIFT_DESC
 } from "@/constants";
+import { SYNC_CHANNELS } from '@/constants/syncChannels';
+import { useCrossWindowSync } from '@/components/composables/useCrossWindowSync';
 
 // --- 变量声明置顶 ---
 const { currentPlay } = useDanmuStore()
@@ -81,6 +83,50 @@ const topThree = ref<any[]>([])
 const fullRanks = ref<any[]>([])
 let cleanup: any = null
 const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
+
+useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
+  // [2026-01-25] 变量声明置顶
+  const memberId = data.user?.realId || data.user?.id;
+  let rankIndex = -1;
+  console.log(`${data.user.name} 进入了直播间`);
+    
+  if (!memberId || fullRanks.value.length === 0) return;
+
+  // 在排行榜中查找该用户
+  // 💡 这里的 field 名请根据你接口返回的真实字段调整（如 douyinUserId 或 id）
+  rankIndex = fullRanks.value.findIndex(item => 
+    (item.douyinUserId === memberId) || (item.id === memberId)
+  );
+
+  if (rankIndex !== -1) {
+    const rankNum = rankIndex + 1;
+    console.log(`✨ 发现大咖！第 ${rankNum} 名：${data.user.name} 进入了直播间`);
+    
+    // 触发播报：你可以调用现有的通知系统
+    processRankEntryNotification(data.user, rankNum);
+  }
+});
+
+
+/**
+ * 专门处理高排名玩家进入的播报
+ */
+const processRankEntryNotification = (user: any, rank: number) => {
+  const notification = {
+    id: `rank-entry-${Date.now()}`,
+    type: 'RANK', // 你可以给 CSS 增加一个 .rank 样式，做成金色气泡
+    user: user.name,
+    avatar: user.avatar,
+    label: '驾临直播间',
+    content: `世界排名第 ${rank} 位`,
+    count: rank // 或者显示奖杯图标
+  };
+
+  // 默认推送到左侧或两侧
+  leftNotify.value?.push(notification);
+};
+
+
 // --- 逻辑：获取接口排行榜 (带容错) ---
 const fetchLeaderboard = async () => {
   if (typeof PlayerAPI.getMonthlyLeaderboard !== 'function') return;

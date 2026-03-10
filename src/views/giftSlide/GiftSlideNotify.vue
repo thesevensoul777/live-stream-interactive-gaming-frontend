@@ -34,12 +34,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-
+import defaultAvatar from '@/assets/images/default-avatar.png';
 const props = defineProps<{
   direction: 1 | 2; 
 }>()
 
-const defaultAvatar = 'https://via.placeholder.com/50'
+
 const queue = ref<any[]>([])
 
 const push = (item: any) => {

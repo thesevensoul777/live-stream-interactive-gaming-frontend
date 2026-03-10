@@ -390,11 +390,12 @@ function parsePlayerData(rawString) {
         'realId': 'douyinUserId',
         'rank':   'TierPoints',
         'score':  'RankPoints',
-        'kills':  'Kills'
+        'kills':  'Kills',
+        'consumption': 'Consumption',
     };
 
     // 💡 需要转为数字的字段列表 (使用你映射后的 API 字段名)
-    const numericFields = ['TierPoints', 'RankPoints', 'Kills'];
+    const numericFields = ['TierPoints', 'RankPoints', 'Kills','Consumption'];
 
     parts.forEach(part => {
         if (part.includes('=')) {

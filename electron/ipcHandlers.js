@@ -40,6 +40,15 @@ ipcMain.handle('add-gift', async (_, payload) => {
   }
 });
 
+// 主进程监听 Vue A 的发送请求
+ipcMain.on('sync-to-overlay', (event, wrapper) => {
+  // wrapper 结构: { subChannel: 'sync:rank-list', payload: [...] }
+  if (windowManager.overlayWin) {
+    // 转发给 Overlay 窗口的总线频道
+    windowManager.overlayWin.webContents.send('global-sync-bus', wrapper);
+  }
+});
+
 
 ipcMain.handle('add-like', async (_, payload) => {
   try {
