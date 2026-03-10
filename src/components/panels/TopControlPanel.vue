@@ -27,8 +27,6 @@
   <!-- 操作按钮 -->
   <div class="actions">
 
-    
-
     <button
       :class="{'confirmed': confirmed}"
       @click="chooseFolder"
@@ -99,6 +97,7 @@
   测试礼物
 </button> -->
 <button @click="send">补送</button>
+<button @click="addRobot">添加人机</button>
 <button @click="openOverlay">开启特效</button>
   </div>
       
@@ -154,6 +153,7 @@ const likeCount = ref<string | number>('*****');
 const player = ref<string>('')
 const count = ref<number>(1)
 const gift = ref<string>('463');
+const robotCount = ref<number>(0)
 
 const GIFT_NAME_MAP: Record<string, string> = {
   '463':  '小心心（血量：+5）',
@@ -362,7 +362,7 @@ const handleMessages = function (msgs: DyMessage[]) {
     }
   } catch (err) {}
   allCasts.push(...newCasts);
- handleDanmu(newCasts);
+   handleDanmu(newCasts);
 
   appendCasts(allCasts, mainCasts, otherCasts)
   if (relayWs && relayWs.isConnected()) {
@@ -431,6 +431,56 @@ function send(): void {
   
   console.log('已执行补送:', payload);
 }
+
+
+function addRobot(): void {
+  // 1. 变量声明置顶
+  let robotId: string;
+  let robotNames: string[];
+  let randomName: string;
+  let mockContent: string;
+  let mockMsg: any;
+
+  // 2. 深度拟真昵称池：主打一个“随性”
+  robotNames = [
+    // --- 没头没脑的情绪类 (最像真人) ---
+    "真服了这老六", "想退休版小张", "今天也没睡饱", "别卷了求求了", "能不能别改Bug",
+    "心碎修勾", "又是想暴富的一天", "摆烂高手", "正在输入中...", "真的很逊诶",
+
+    // --- 吃货/生活实录类 ---
+    "冰美式去冰", "香菜必须加", "糯米糍", "今天吃火锅", "碳水爱好者",
+    "麻辣烫不要辣", "微甜奶油", "想喝奶茶了", "干饭第一名", "榴莲爱好者",
+
+    // --- 迷惑行为/黑话类 ---
+    "麦门信徒", "肯德基疯狂星期四", "泰裤辣", "真的栓Q", "优雅永不过时",
+    "脆皮打工人", "修勾守护者", "纯爱战士", "尊贵的极氪车主", "互联网编外人员",
+
+    // --- 极简/随手打的类 ---
+    "。 ", "...", "hhh", "Joker", "十七", 
+    "阿白", "大头", "隔壁老王", "陈同学", "某不知名网友"
+  ];
+
+  robotId = "robot_" + Math.floor(Math.random() * 100000);
+  randomName = robotNames[Math.floor(Math.random() * robotNames.length)];
+  
+  // 3. 模拟逻辑...
+  mockContent = Math.random() > 0.5 ? '1' : '2';
+
+  mockMsg = {
+    method: "WebcastChatMessage", 
+    content: mockContent,
+    time: Date.now(),
+    user: {
+      realId: robotId,
+      name: randomName,
+      avatar: "", 
+    }
+  };
+
+  handleDanmu([mockMsg]);
+}
+
+
 
 function openOverlay() {
   (window as any).newWindow.openOverlay();

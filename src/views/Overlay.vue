@@ -65,6 +65,9 @@ import * as PlayerAPI from '@/api/player'
 import rank1Frame from '@/assets/ranks/1.webp'
 import rank2Frame from '@/assets/ranks/2.webp'
 import rank3Frame from '@/assets/ranks/3.webp'
+import { 
+  LW_GIFT_DESC
+} from "@/constants";
 
 // --- 变量声明置顶 ---
 const { currentPlay } = useDanmuStore()
@@ -91,22 +94,8 @@ const fetchLeaderboard = async () => {
     console.warn("排行榜请求失败，保持当前状态");
   }
 }
-const GIFT_ACTION_DESC: Record<string, string> = {
-  'ADD_HP': '血量+5',
-  'ADD_ATT': '攻击力+1',
-  'ADD_SPEED': '移速+1',
-  'SPAWN_MELEE': '近战单位x1',
-  'SPAWN_RANGE': '远程单位x1',
-  'SPAWN_MAGIC': '魔法/控制单位x1',
-  'SPAWN_ELITE': '高级兵种x4',
-  'SPAWN_SIEGE': '攻城单位x1',
-  'LEVEL_UP': '召唤师提升一级',
-  'ADD_MONEY': '获得 10000金币',
-  'CHANGE_SUMMONER': '切换召唤师类型',
-  'TEAM_BUFF_SMALL': '团队小增益',
-  'UNLOCK_TOWER': '随机解锁两座建筑',
-  'ADD_LOW_POWER': '团队大增益',
-};
+
+
 
 // --- 变量声明置顶 ---
 const formatNumber = (num: number | string): string => {
@@ -145,7 +134,7 @@ const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
     // 礼物根据 ID 匹配功能描述
     label = '获得了';
     const giftCommand = data.command; 
-    const effectDesc = GIFT_ACTION_DESC[giftCommand] || '未知力量';
+    const effectDesc = LW_GIFT_DESC[giftCommand] || '未知力量';
     displayContent = `${effectDesc}`; 
     displayCount = data.count || 1;
   }
