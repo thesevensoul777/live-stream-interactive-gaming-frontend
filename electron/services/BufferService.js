@@ -22,7 +22,10 @@ export class BufferService {
 
 
     setAuthToken(token) {
+      if(this.authToken==null){
     this.authToken = token;
+      }
+
   }
 
 

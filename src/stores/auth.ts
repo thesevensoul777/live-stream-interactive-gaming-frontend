@@ -28,11 +28,12 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await currentUserApi()
       // 对应你的 ApiResponse<T> 结构：res.data 是包装层，res.data.data 是具体用户
       user.value = res.data.data 
-      
       // 如果 Electron 环境存在，同步 Token
-      if ((window as any).auth?.setToken) {
-        (window as any).auth.setToken(token)
-      }
+        if ((window as any).auth) {
+            (window as any).auth.setToken(token)
+        }
+     
+  
     } catch (err) {
       console.error("验证登录状态失败:", err)
       logout() // 失败则清理掉本地的 30 天过期 Token

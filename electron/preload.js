@@ -125,7 +125,10 @@ contextBridge.exposeInMainWorld('gameAPI', {
   launchWar3: (gamePath) => ipcRenderer.invoke('launch-war3', gamePath),
 });
 
-
+contextBridge.exposeInMainWorld('auth', {
+  // 必须在这里定义，渲染进程才能通过 window.auth.setToken 调用
+  setToken: (token) => ipcRenderer.send('auth:setToken', token)
+})
 /* ================= Open New Window ================= */
 contextBridge.exposeInMainWorld('newWindow', {
   /**

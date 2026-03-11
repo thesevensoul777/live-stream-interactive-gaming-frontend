@@ -2,6 +2,7 @@
   <div class="permanent-green-bg"></div>
 
   <div class="overlay-content">
+        <RankEntryEffect ref="rankEffect" />
     
     <div class="top-rank-bar">
       <div 
@@ -35,6 +36,7 @@
     <GiftSlideNotify ref="leftNotify" :direction="1" />
     <GiftSlideNotify ref="rightNotify" :direction="2" />
 
+
     <transition name="zoom">
       <div v-if="showRankList" class="full-rank-overlay">
         <div class="rank-panel">
@@ -59,12 +61,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useDanmuStore } from '@/components/composables/DanmuData'
-import GiftSlideNotify from '@/views/giftSlide/GiftSlideNotify.vue'
+import GiftSlideNotify from '@/views/Overlay/GiftSlideNotify.vue'
+import RankEntryEffect from '@/views/Overlay/RankEntryEffect.vue'
 import type { GifddDTO, LikeDTO } from "@/types/danmu"
 import * as PlayerAPI from '@/api/player'
 import rank1Frame from '@/assets/ranks/1.webp'
 import rank2Frame from '@/assets/ranks/2.webp'
 import rank3Frame from '@/assets/ranks/3.webp'
+import otherRankFrame from '@/assets/ranks/otherRank.png'
 import { 
   LW_GIFT_DESC
 } from "@/constants";
@@ -83,30 +87,51 @@ const topThree = ref<any[]>([])
 const fullRanks = ref<any[]>([])
 let cleanup: any = null
 const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
+const rankEffect = ref()
+
+// useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
+//   // [2026-01-25] 变量声明置顶
+//   const memberId = data.user?.realId || data.user?.id;
+//   let rankIndex = -1;
+
+//   if (!memberId || fullRanks.value.length === 0) return;
+
+//   rankIndex = fullRanks.value.findIndex(item => 
+//     (item.douyinUserId === memberId) || (item.id === memberId)
+//   );
+
+//   if (rankIndex !== -1) {
+//     const rankNum = rankIndex + 1;
+    
+//     // 1. 触发中心特写 (1-20名)
+//     // 增加逻辑检查：组件存在且 push 方法可用
+//     if (rankEffect.value && typeof rankEffect.value.push === 'function') {
+//       rankEffect.value.push({
+//         rank: rankNum,
+//         user: data.user.name,
+//         avatar: data.user.avatar
+//       });
+//     }
+
+//   }
+// });
+
 
 useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
   // [2026-01-25] 变量声明置顶
   const memberId = data.user?.realId || data.user?.id;
-  let rankIndex = -1;
-  console.log(`${data.user.name} 进入了直播间`);
-    
-  if (!memberId || fullRanks.value.length === 0) return;
 
-  // 在排行榜中查找该用户
-  // 💡 这里的 field 名请根据你接口返回的真实字段调整（如 douyinUserId 或 id）
-  rankIndex = fullRanks.value.findIndex(item => 
-    (item.douyinUserId === memberId) || (item.id === memberId)
-  );
 
-  if (rankIndex !== -1) {
-    const rankNum = rankIndex + 1;
-    console.log(`✨ 发现大咖！第 ${rankNum} 名：${data.user.name} 进入了直播间`);
+
+      rankEffect.value.push({
+        rank: 1,
+        user: data.user.name,
+        avatar: data.user.avatar
+      });
     
-    // 触发播报：你可以调用现有的通知系统
-    processRankEntryNotification(data.user, rankNum);
-  }
+
+  
 });
-
 
 /**
  * 专门处理高排名玩家进入的播报
