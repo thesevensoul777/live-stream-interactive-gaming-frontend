@@ -140,7 +140,7 @@ let stopListening: () => void;
 const user = computed(() => authStore.user)
 const { sync: syncUser } = useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE);
 
-const { appendCasts, clearDanmu,currentPlay } = useDanmuStore()
+const { appendCasts, clearDanmu,currentPlay,clearCurrentPlay } = useDanmuStore()
 
 // 状态
 // 连接状态
@@ -496,7 +496,7 @@ onMounted(() => {
   stopListening = (window as any).electronAPI.onGameSummary(async (data: any[]) => {
     // data 是魔兽传来的数组: [{douyinUserId: '1001', TierPoints: 5, RankPoints: 1, Kills: 1}, ...]
     console.log("收到魔兽结算推送:", data);
-
+    clearCurrentPlay()
     try {
       // 1. 组装数据
       const payload: GameSummaryRequest = {
@@ -515,6 +515,7 @@ onMounted(() => {
 
       if (res.data.success) {
         console.log(`✅ 结算成功，处理了 ${res.data.processed} 名玩家数据`);
+
       }
     } catch (err) {
       console.error("❌ 同步到服务器失败:", err);

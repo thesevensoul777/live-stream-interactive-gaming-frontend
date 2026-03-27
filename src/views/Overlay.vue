@@ -89,49 +89,49 @@ let cleanup: any = null
 const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
 const rankEffect = ref()
 
-// useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
-//   // [2026-01-25] 变量声明置顶
-//   const memberId = data.user?.realId || data.user?.id;
-//   let rankIndex = -1;
-
-//   if (!memberId || fullRanks.value.length === 0) return;
-
-//   rankIndex = fullRanks.value.findIndex(item => 
-//     (item.douyinUserId === memberId) || (item.id === memberId)
-//   );
-
-//   if (rankIndex !== -1) {
-//     const rankNum = rankIndex + 1;
-    
-//     // 1. 触发中心特写 (1-20名)
-//     // 增加逻辑检查：组件存在且 push 方法可用
-//     if (rankEffect.value && typeof rankEffect.value.push === 'function') {
-//       rankEffect.value.push({
-//         rank: rankNum,
-//         user: data.user.name,
-//         avatar: data.user.avatar
-//       });
-//     }
-
-//   }
-// });
-
-
 useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
   // [2026-01-25] 变量声明置顶
   const memberId = data.user?.realId || data.user?.id;
+  let rankIndex = -1;
 
+  if (!memberId || fullRanks.value.length === 0) return;
 
+  rankIndex = fullRanks.value.findIndex(item => 
+    (item.douyinUserId === memberId) || (item.id === memberId)
+  );
 
+  if (rankIndex !== -1) {
+    const rankNum = rankIndex + 1;
+    
+    // 1. 触发中心特写 (1-20名)
+    // 增加逻辑检查：组件存在且 push 方法可用
+    if (rankEffect.value && typeof rankEffect.value.push === 'function') {
       rankEffect.value.push({
-        rank: 1,
+        rank: rankNum,
         user: data.user.name,
         avatar: data.user.avatar
       });
+    }
+
+  }
+});
+
+
+// useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
+//   // [2026-01-25] 变量声明置顶
+//   const memberId = data.user?.realId || data.user?.id;
+
+
+
+//       rankEffect.value.push({
+//         rank: 1,
+//         user: data.user.name,
+//         avatar: data.user.avatar
+//       });
     
 
   
-});
+// });
 
 /**
  * 专门处理高排名玩家进入的播报
