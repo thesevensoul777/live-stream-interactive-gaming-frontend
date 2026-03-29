@@ -75,6 +75,7 @@ export const LW_COMMAND_MAP: Record<string, string> = {
   '买4': 'BUY_4',
   '买5': 'BUY_5',
   '买6': 'BUY_6',
+  '合成': 'COMBINING',
 };
 
 export  const LW_GIFT_NAME_MAP: Record<string, string> = {

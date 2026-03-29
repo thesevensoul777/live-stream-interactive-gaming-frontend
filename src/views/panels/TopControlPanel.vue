@@ -145,7 +145,7 @@ const { appendCasts, clearDanmu,currentPlay,clearCurrentPlay } = useDanmuStore()
 // 状态
 // 连接状态
 const connectStatus = ref<ConnectStatus>(0);
-const douyinId = ref<string>('10438864178')
+const douyinId = ref<string>('672573338415')
 const secret = ref<string>('1')
 
 
@@ -458,7 +458,7 @@ function addRobot(): void {
   
   // 3. 模拟逻辑...
   mockContent = Math.random() > 0.5 ? '1' : '2';
-
+1
   mockMsg = {
     method: "WebcastChatMessage", 
     content: mockContent,

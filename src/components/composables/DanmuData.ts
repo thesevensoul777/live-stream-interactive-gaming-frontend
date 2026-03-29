@@ -70,7 +70,7 @@ export function useDanmuStore() {
     return null; 
   }
 
-  function clearCurrentPlay() {
+ async function clearCurrentPlay() {
     currentPlay.value = [];
     syncToElectron(); // 清空时也同步一下
     console.log("[Store] currentPlay 已清空");
