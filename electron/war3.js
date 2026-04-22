@@ -128,6 +128,7 @@ export async function saveCommand(payload) {
         const fullText = `|realId=${tool.encodeValue(payload.msg.realId)}|` +
                          `*user=${tool.encodeValue(payload.msg.user)}|` +
                          `*command=${tool.encodeValue(payload.action)}|` + 
+                         `*golds=${tool.encodeValue(payload.golds)}|` + 
                          `*tierPoints=${tool.encodeValue(tPoints)}`; // 使用处理后的变量
    
         await writeToWarcraftQueue(CommandPath, fullText);
@@ -392,10 +393,11 @@ function parsePlayerData(rawString) {
         'score':  'RankPoints',
         'kills':  'Kills',
         'consumption': 'Consumption',
+        'addGolds':'addGolds'
     };
 
     // 💡 需要转为数字的字段列表 (使用你映射后的 API 字段名)
-    const numericFields = ['TierPoints', 'RankPoints', 'Kills','Consumption'];
+    const numericFields = ['TierPoints', 'RankPoints', 'Kills','Consumption','addGolds'];
 
     parts.forEach(part => {
         if (part.includes('=')) {

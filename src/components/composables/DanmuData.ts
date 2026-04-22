@@ -18,57 +18,65 @@ export function useDanmuStore() {
   }
 
   // 核心逻辑：判断 realId 是否已存在，不存在则存入并返回分数
-  async function addUniquePlay(msg: DanmuCommandDTO): Promise<number | null> {
+async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints: number, golds: number } | null> {
     // 变量声明置顶
     let isExist: boolean;
     let player: DanmuCommandDTO | undefined;
-    let rankPointsResult: number;
+    let res: any; // 用于存储异步请求结果
+    let resultObj: { rankPoints: number, golds: number };
 
     if (!msg.realId) return null;
-    
+
     // 检查是否已在列表中
     isExist = currentPlay.value.some(item => item.realId === msg.realId);
-    
-    if (!isExist) {
-      // 1. 先加入本地列表
-      currentPlay.value.push(msg);
-      
-      // 2. 立即同步一次（即使此时还没拿到分数，先让名字显示出来）
-      syncToElectron();
-      try {
-        const res = await syncRank({
-          douyinUserId: msg.realId,
-          douyinName: msg.user,
-          gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D",
-          avatarUrl:msg.avatar
-        });
 
-        if (res.data.success) {
-          // 3. 更新本地存储中的分数和段位
-          player = currentPlay.value.find(p => p.realId === msg.realId);
-          if (player) {
-            player.rankPoints = res.data.rankPoints;
-            player.tierPoints = res.data.tierPoints;
-            player.tier = res.data.tier; // 建议也存下段位文字
-          }
-          
-          // 4. 数据更新后，再次同步给 Overlay
-          syncToElectron();
-          
-          return res.data.rankPoints;
+    if (!isExist) {
+        // 1. 先加入本地列表
+        currentPlay.value.push(msg);
+
+        // 2. 立即同步一次
+        syncToElectron();
+        
+        try {
+            res = await syncRank({
+                douyinUserId: msg.realId,
+                douyinName: msg.user,
+                gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D",
+                avatarUrl: msg.avatar,
+                golds: msg.golds
+            });
+
+            if (res.data.success) {
+                // 3. 更新本地存储
+                player = currentPlay.value.find(p => p.realId === msg.realId);
+                if (player) {
+                    player.rankPoints = res.data.rankPoints;
+                    player.tierPoints = res.data.tierPoints;
+                    player.tier = res.data.tier;
+                    player.golds = res.data.golds;
+                }
+
+                // 4. 数据更新后同步
+                syncToElectron();
+
+                // 返回包含两个属性的对象
+                return {
+                    tierPoints: res.data.tierPoints,
+                    golds: res.data.golds
+                };
+            }
+        } catch (err) {
+            console.error("同步失败", err);
         }
-      } catch (err) {
-        console.error("同步失败", err);
-      }
-      
-      // 如果 API 失败，返回 0 分作为默认值
-      return 0; 
+
+        // 如果 API 失败，返回默认值对象
+        return { rankPoints: 0, golds: 0 };
     }
-    
+
     // 玩家已存在，返回 null
     console.warn(`[Store] 玩家 ${msg.user} 已在列表中`);
-    return null; 
-  }
+    return null;
+}
 
  async function clearCurrentPlay() {
     currentPlay.value = [];

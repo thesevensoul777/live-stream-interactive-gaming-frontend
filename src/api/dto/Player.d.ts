@@ -14,6 +14,7 @@ export interface SyncPlayerRankRequest {
   gameTypeId: string;
   douyinName?: string; // 顺便把名字传过去，方便后端创建新玩家
   avatarUrl?: string; // 头像路径
+  golds?:number;
 }
 
 
@@ -26,6 +27,7 @@ export interface PlayerRankResponse {
   rank: number; // 排名
   tier:string //名字
   success: boolean;
+  golds:number;
 }
 
 // 每一个玩家的结算项
@@ -34,6 +36,7 @@ export interface PlayerSummaryItem {
   rankPoints: number; // 本局增量
   tierPoints: number; // 魔兽传来的最新总分
   kills: number;      // 本局增量
+  addGolds:number; //增加或减少的金币
 }
 
 // 整个结算请求的 Payload
