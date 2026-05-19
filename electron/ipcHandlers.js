@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, net } from 'electron';
+import zlib from 'zlib';
 import {
   getWarcraftPath,
   injectWar3,
@@ -228,6 +229,19 @@ export function registerIpcHandlers(win, bufferService, windowManager) {
       const senderWin = BrowserWindow.fromWebContents(event.sender);
       return await launchWarcraft(finalPath, senderWin);
     } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('brotli:decompress', async (_event, data) => {
+    try {
+      // data comes as a serialized ArrayBuffer (Buffer)
+      const buf = Buffer.from(data);
+      const decompressed = zlib.brotliDecompressSync(buf);
+      // Return as Uint8Array-like plain array for IPC serialization
+      return { ok: true, data: Array.from(decompressed) };
+    } catch (err) {
+      console.error('[brotli:decompress failed]', err);
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });

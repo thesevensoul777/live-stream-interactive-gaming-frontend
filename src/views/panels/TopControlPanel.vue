@@ -211,8 +211,8 @@ function createPlatformPanel(room = ''): PlatformPanelState {
 const activePlatform = ref<LivePlatform>('douyin')
 const platformPanels = ref<Record<LivePlatform, PlatformPanelState>>({
   douyin: createPlatformPanel('672573338415'),
-  douyu: createPlatformPanel(),
-  bilibili: createPlatformPanel(),
+  douyu: createPlatformPanel(''),
+  bilibili: createPlatformPanel('13786821'),
   tiktok: createPlatformPanel(),
 })
 
@@ -387,15 +387,28 @@ async function startBilibiliListen() {
 
     cast.on('open', () => {
       panel.status = 1
+      panel.error = ''
     })
 
     cast.on('close', () => {
-      panel.status = 0
+      if (!cast['isReconnecting']) {
+        panel.status = 0
+      }
     })
 
     cast.on('error', (err: Error) => {
       panel.status = 0
       panel.error = err.message || 'Bilibili 连接失败'
+    })
+
+    cast.on('reconnecting', (attempt: number) => {
+      panel.status = 0
+      panel.error = `Bilibili 连接断开，正在重连 (${attempt}/5)...`
+    })
+
+    cast.on('reconnect', () => {
+      panel.status = 1
+      panel.error = ''
     })
 
     cast.on('message', (msgs: DyMessage[]) => {
@@ -515,12 +528,14 @@ function handleMessages(msgs: DyMessage[]) {
 }
 
 function handleBilibiliMessages(msgs: DyMessage[]) {
+ 
   const platform: LivePlatform = 'bilibili'
   const uniqueMsgs: DyMessage[] = []
 
   try {
     for (const msg of msgs) {
       if (!msg.id || biliCastSet.has(msg.id)) continue
+  
       biliCastSet.add(msg.id)
       uniqueMsgs.push(msg)
     }
@@ -760,12 +775,18 @@ onUnmounted(() => {
   border-radius: 6px;
   padding: 12px;
   background: #fbfcff;
+  /* 弹幕列表容器：固定高度，超出滚动 */
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .platform-block h3 {
   margin: 0 0 10px;
   font-size: 14px;
   color: #2f3f57;
+  flex-shrink: 0;
 }
 
 .field {

@@ -49,14 +49,13 @@
 
 <script setup lang="ts">
 import CastTypeBtn from '@/components/CastTypeBtn/index.vue';
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { CastType } from '@/components/CastTypeBtn/type';
 import { getId } from '@/utils/idUtil';
 import CastItem from './CastItem.vue';
 import { CastMethod, type DyMessage } from '@/core/dycast';
 import { throttle } from '@/utils/loashUtil';
 import { useDanmuStore } from '@/components/composables/DanmuData'
-import { watch } from 'vue'
 import type { LivePlatform } from '@/core/livePlatforms'
 
 
@@ -148,22 +147,54 @@ const setCastType = function (type: CastType, flag?: boolean) {
 /** 显示弹幕 */
 const casts = ref<DyMessage[]>([]);
 
+// ── Message buffer for batching ──
+const messageBuffer = ref<DyMessage[]>([])
+let flushTimer: ReturnType<typeof setTimeout> | undefined
+const FLUSH_INTERVAL = 150 // ms, sync with BiliCast batch interval
+
+function startFlushTimer() {
+  stopFlushTimer()
+  flushTimer = setInterval(() => {
+    flushBuffer()
+  }, FLUSH_INTERVAL)
+}
+
+function stopFlushTimer() {
+  if (flushTimer) {
+    clearInterval(flushTimer)
+    flushTimer = undefined
+  }
+}
+
+function flushBuffer() {
+  if (messageBuffer.value.length === 0) return
+  const batch = messageBuffer.value.splice(0)
+  // Filter by active type filters
+  const filtered = batch.filter(item => item.method && typeMap.get(item.method))
+  if (filtered.length === 0) return
+  casts.value.push(...filtered)
+  // Throttled auto-scroll: only scroll if at bottom
+  if (isAtBottom) {
+    nextTick(() => scrollToBottom())
+  }
+}
+
 /**
  * 设置弹幕显示
  */
 const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
-  // 先筛选出符合条件的消息
-  const list: DyMessage[] = msgs.filter(item => item.method && typeMap.get(item.method));
-
-
-
-  // 更新 casts
-  if (isClear) casts.value = list;
-  else casts.value.push(...list);
-
-  nextTick(() => {
-    autoScrollToBottom();
-  });
+  if (isClear) {
+    // Full replacement: flush pending buffer first, then replace
+    flushBuffer()
+    const list: DyMessage[] = msgs.filter(item => item.method && typeMap.get(item.method));
+    casts.value = list
+    nextTick(() => {
+      autoScrollToBottom();
+    });
+  } else {
+    // Batch: push to buffer instead of directly to casts
+    messageBuffer.value.push(...msgs)
+  }
 };
 
 /**
@@ -180,6 +211,14 @@ onMounted(() => {
       }
     }
   }
+  // Start the batch flush timer
+  startFlushTimer()
+});
+
+onUnmounted(() => {
+  stopFlushTimer()
+  // Flush any remaining buffered messages
+  flushBuffer()
 });
 
 /** 列表DOM Ref */
@@ -209,20 +248,51 @@ const autoScrollToBottom = function () {
   if (isAtBottom) scrollToBottom();
 };
 
+// Track last seen lengths to detect new items without full replacement
+let lastMainLen = 0
+const lastPlatformLen: Record<string, number> = {}
+
 watch(
   mainDanmu,
-  () => {
+  (list) => {
     if (props.platform) return
-    addCasts(mainDanmu.value, true)
+    if (!list) return
+    // On first watch fire, do full load
+    if (lastMainLen === 0 && list.length > 0) {
+      addCasts(list, true)
+    } else if (list.length > lastMainLen) {
+      // Only push new items
+      const newItems = list.slice(lastMainLen)
+      addCasts(newItems, false)
+    }
+    lastMainLen = list.length
   },
-  { deep: true, immediate: true },
+  { immediate: true },
 )
 
 watch(
   platformDanmu,
   (list) => {
     if (!props.platform) return
-    addCasts(list || [], true)
+    if (!list) return
+    const key = props.platform
+    const prevLen = lastPlatformLen[key] ?? 0
+    // Handle clear case (empty array after having items)
+    if (list.length === 0 && prevLen > 0) {
+      casts.value = []
+      messageBuffer.value = []
+      lastPlatformLen[key] = 0
+      return
+    }
+    // On first watch fire, do full load
+    if (prevLen === 0 && list.length > 0) {
+      addCasts(list, true)
+    } else if (list.length > prevLen) {
+      // Only push new items
+      const newItems = list.slice(prevLen)
+      addCasts(newItems, false)
+    }
+    lastPlatformLen[key] = list.length
   },
   { immediate: true },
 )
@@ -290,6 +360,7 @@ $darkText: #a5a5a5;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
+  min-height: 0; /* 确保 flex 子项可以收缩 */
   box-shadow: 0px 5px 10px 0px $shadowB3, 0px 3px 6px 0px $shadowB15, 0 0 1px 0 $lightBd;
   border-radius: 0.5rem;
   background-color: $lightBg;
@@ -392,6 +463,7 @@ $darkText: #a5a5a5;
   position: relative;
   width: 100%;
   flex-grow: 1;
+  min-height: 0; /* 允许 flex 子项收缩 */
   box-sizing: border-box;
   overflow-y: auto;
   padding: 12px 8px;
@@ -400,6 +472,7 @@ $darkText: #a5a5a5;
     flex-direction: column;
     width: 100%;
     height: 100%;
+    min-height: 0; /* 允许 flex 子项收缩 */
     box-sizing: border-box;
     &::-webkit-scrollbar {
       width: 5px;

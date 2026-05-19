@@ -149,8 +149,41 @@ export interface DyMessage {
   rtfContent?: CastRtfContent[];
   room?: LiveRoom;
   rank?: LiveRankItem[];
-  time?: number; 
+  time?: number;
   likeCount?:string;
+  // ── blivechat 兼容字段 ──
+  /** 翻译文本 */
+  translation?: string;
+  /** 粉丝牌等级 */
+  medalLevel?: number;
+  /** 粉丝牌名称 */
+  medalName?: string;
+  /** 头衔类型 (0=普通, 1=舰队, 2=房管, 3=主播) */
+  privilegeType?: number;
+  /** 用户等级 */
+  authorLevel?: number;
+  /** 是否新用户 */
+  isNewbie?: boolean;
+  /** 是否手机认证 */
+  isMobileVerified?: boolean;
+  /** 内容类型 (0=文本, 1=表情) */
+  contentType?: number;
+  /** 内容类型参数 */
+  contentTypeParams?: string[];
+  /** 是否为镜像弹幕 */
+  isMirror?: boolean;
+  /** 是否为礼物弹幕 */
+  isGiftDanmaku?: boolean;
+  /** 礼物总价(金币) */
+  totalCoin?: number;
+  /** 礼物免费币 */
+  totalFreeCoin?: number;
+  /** 礼物图标URL */
+  giftIconUrl?: string;
+  /** Super Chat 价格(元) */
+  price?: number;
+  /** 要删除的Super Chat ID列表 */
+  delSuperChatIds?: string[];
 }
 
 export enum CastMethod {

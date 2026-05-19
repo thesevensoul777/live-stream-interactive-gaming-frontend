@@ -86,7 +86,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         callback(value);
       }
     });
-  }
+  },
+
+  /**
+   * Brotli decompress binary data via main process (Node.js zlib)
+   */
+  brotliDecompress: async (data) => {
+    return ipcRenderer.invoke('brotli:decompress', data);
+  },
 
 });
 
