@@ -5,16 +5,16 @@
   "type": "module",
   "main": "electron/main.js",
   "build": {
-   "extraResources": [
-  {
-    "from": "electron/war3plugin",
-    "to": "war3plugin"
-  },
-  {
-    "from": "electron/bin",
-    "to": "bin" 
-  }
-],
+    "extraResources": [
+      {
+        "from": "electron/war3plugin",
+        "to": "war3plugin"
+      },
+      {
+        "from": "electron/bin",
+        "to": "bin"
+      }
+    ],
     "appId": "com.example.myapp",
     "productName": "MyElectronApp",
     "files": [
@@ -72,6 +72,7 @@
   },
   "dependencies": {
     "axios": "^1.13.2",
+    "bilibili-live-danmaku": "^0.7.15",
     "fs-extra": "^11.3.3",
     "pako": "^2.1.0",
     "pinia": "^3.0.4",

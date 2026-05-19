@@ -29,6 +29,18 @@ function netGetText(url, headers = {}) {
   });
 }
 
+async function nodeFetchText(url, headers = {}) {
+  const res = await fetch(url, {
+    method: 'GET',
+    headers,
+    redirect: 'follow',
+  });
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return res.text();
+}
+
 function netGetBuffer(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -46,6 +58,19 @@ function netGetBuffer(url, headers = {}) {
     request.on('error', reject);
     request.end();
   });
+}
+
+async function nodeFetchBuffer(url, headers = {}) {
+  const res = await fetch(url, {
+    method: 'GET',
+    headers,
+    redirect: 'follow',
+  });
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
 }
 
 export function registerIpcHandlers(win, bufferService, windowManager) {
@@ -118,11 +143,14 @@ export function registerIpcHandlers(win, bufferService, windowManager) {
   });
 
   ipcMain.handle('api:fetch-live', async (_event, url, headers = {}) => {
-    return netGetText(url, headers);
+    // NOTE: electron.net.request may be blocked by client-side filters (net::ERR_BLOCKED_BY_CLIENT)
+    // for some domains (e.g. api.live.bilibili.com). Using Node.js fetch bypasses session filters.
+    return nodeFetchText(url, headers);
   });
 
   ipcMain.handle('api:fetch-binary', async (_event, url, headers = {}) => {
     const finalUrl = url.startsWith('/') ? `https://live.douyin.com${url}` : url;
+    // Douyin assets are sensitive to Referer/UA; keep using electron.net with forced headers.
     return netGetBuffer(finalUrl, {
       Referer: 'https://live.douyin.com/',
       'User-Agent':

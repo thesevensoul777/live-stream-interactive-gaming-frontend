@@ -9,10 +9,6 @@
     <div class="content">
       <TopControlPanel />
 
-      <div class="middle">
-        <DanmuList :types="['social', 'like', 'member', 'chat', 'gift']" />
-        </div>
-
       <RecordTable />
     </div>
   </div>
@@ -26,7 +22,6 @@ import { useAuthStore } from '@/stores/auth'
 // 导入组件
 import MainSelector from '@/views/sidebar/MainSelector.vue'
 import TopControlPanel from '@/views/panels/TopControlPanel.vue'
-import DanmuList from '@/views/panels/DanmuList.vue'
 import RecordTable from '@/views/panels/RecordTable.vue'
 
 const router = useRouter()
@@ -71,20 +66,6 @@ onMounted(async () => {
   padding: 16px;     
   box-sizing: border-box;
   background-color: #f0f2f5; /* 略显深色的背景色，区分左侧导航 */
-}
-
-/* 中部功能区块 */
-.middle {
-  display: flex;
-  gap: 16px;          
-  margin: 16px 0;     
-  padding: 16px;      
-  height: 45%;        /* 稍微调高一点，确保弹幕列表有足够空间 */
-  width: 100%;        /* 宽度设为 100% 自动填充右侧区域 */
-  background: #ffffff;  
-  border-radius: 8px;   
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05); /* 增加一点阴影感 */
-  box-sizing: border-box;
 }
 
 /* 确保底部表格能占满剩余空间 */

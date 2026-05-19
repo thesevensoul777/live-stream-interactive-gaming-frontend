@@ -6,9 +6,10 @@
       'pos-left': pos === 'left',
       'no-prefix': noPrefix,
       'theme-light': theme === 'light',
-      'theme-dark': theme === 'dark'
+      'theme-dark': theme === 'dark',
+      embedded: embedded
     }">
-    <div class="cast-list-header">
+    <div v-if="!embedded" class="cast-list-header">
       <!-- MAC 前缀 -->
       <div class="mac-prefix">
       </div>
@@ -56,9 +57,10 @@ import { CastMethod, type DyMessage } from '@/core/dycast';
 import { throttle } from '@/utils/loashUtil';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import { watch } from 'vue'
+import type { LivePlatform } from '@/core/livePlatforms'
 
 
-const { allCasts, mainCasts } = useDanmuStore()
+const { allCasts, mainCasts, platformMainCasts } = useDanmuStore()
 
 // 只显示聊天/礼物/emoji
 
@@ -68,18 +70,26 @@ const allDanmu = computed(() => allCasts.value )
 // 所有弹幕
 const mainDanmu = computed(() => mainCasts.value )
 
+const platformDanmu = computed(() => {
+  if (!props.platform) return null
+  return platformMainCasts.value[props.platform]
+})
+
 interface CastListProps {
   title?: string;
   theme?: 'light' | 'dark';
   types?: CastType[];
   pos?: 'center' | 'left';
   noPrefix?: boolean;
+  platform?: LivePlatform;
+  embedded?: boolean;
 }
 
 const props = withDefaults(defineProps<CastListProps>(), {
   types: () => [],
   noPrefix: false,
-  pos: 'center'
+  pos: 'center',
+  embedded: false
 });
 // 类型控制器
 const typeMap: Map<CastMethod, boolean> = new Map();
@@ -199,9 +209,23 @@ const autoScrollToBottom = function () {
   if (isAtBottom) scrollToBottom();
 };
 
-watch(mainDanmu, (newVal) => {
-  addCasts(mainDanmu.value);
-}, { deep: true, immediate: true })
+watch(
+  mainDanmu,
+  () => {
+    if (props.platform) return
+    addCasts(mainDanmu.value, true)
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  platformDanmu,
+  (list) => {
+    if (!props.platform) return
+    addCasts(list || [], true)
+  },
+  { immediate: true },
+)
 
 
 

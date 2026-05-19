@@ -51,19 +51,12 @@
       <div class="platform-grid">
         <section class="platform-block">
           <h3>弹幕信息</h3>
-          <div class="message-list">
-            <div
-              v-for="message in platformPanels[activePlatform].messages"
-              :key="message.id"
-              class="message-item"
-            >
-              <strong>{{ message.user }}</strong>
-              <span>{{ message.content }}</span>
-            </div>
-            <div v-if="platformPanels[activePlatform].messages.length === 0" class="empty-state">
-              暂无弹幕
-            </div>
-          </div>
+          <DanmuList
+            embedded
+            pos="center"
+            :platform="activePlatform"
+            :types="['social', 'like', 'member', 'chat', 'gift']"
+          />
         </section>
 
         <section class="platform-block">
@@ -139,6 +132,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import DanmuList from '@/views/panels/DanmuList.vue'
 import {
   CastMethod,
   DyCast,
@@ -165,6 +159,7 @@ import {
   type LivePlatform,
   type LiveRoomInfo as PlatformRoomInfo,
 } from '@/core/livePlatforms'
+import { BiliCast } from '@/core/bilicast'
 import { debug } from 'console'
 
 type PlatformPlayer = {
@@ -224,7 +219,7 @@ const platformPanels = ref<Record<LivePlatform, PlatformPanelState>>({
 const authStore = useAuthStore()
 const user = computed(() => authStore.user)
 const { sync: syncUser } = useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE)
-const { currentPlay, clearDanmu, clearCurrentPlay } = useDanmuStore()
+const { currentPlay, clearDanmu, clearCurrentPlay, appendPlatformMainCasts, clearPlatformMainCasts } = useDanmuStore()
 
 const globalSecret = ref('1')
 const path = ref('')
@@ -235,6 +230,8 @@ let stopListening: (() => void) | undefined
 let castWs: DyCast | undefined
 let relayWs: RelayCast | undefined
 const castSet = new Set<string>()
+const biliCastSet = new Set<string>()
+let biliWs: BiliCast | undefined
 const allCasts: DyMessage[] = []
 const platformRoomInfoTimers = new Map<LivePlatform, number>()
 let lastRobotContent = '2'
@@ -309,14 +306,30 @@ function stopDouyinListen() {
   }
   castSet.clear()
   allCasts.length = 0
-  clearDanmu()
+  clearPlatformMainCasts('douyin')
   platformPanels.value.douyin.status = 0
   platformPanels.value.douyin.messages = []
+}
+
+function stopBilibiliListen() {
+  if (biliWs) {
+    biliWs.close()
+    biliWs = undefined
+  }
+  biliCastSet.clear()
+  clearPlatformMainCasts('bilibili')
+  platformPanels.value.bilibili.status = 0
+  platformPanels.value.bilibili.messages = []
 }
 
 function stopPlatformListen(platform: LivePlatform) {
   if (platform === 'douyin') {
     stopDouyinListen()
+    return
+  }
+  if (platform === 'bilibili') {
+    stopBilibiliListen()
+    stopPlatformRoomInfoTimer(platform)
     return
   }
   stopPlatformRoomInfoTimer(platform)
@@ -334,7 +347,68 @@ async function togglePlatformListen(platform: LivePlatform) {
     return
   }
 
+  if (platform === 'bilibili') {
+    await startBilibiliListen()
+    return
+  }
+
   await startPlatformRoomInfoMonitor(platform)
+}
+
+async function startBilibiliListen() {
+  const panel = platformPanels.value.bilibili
+  if (!panel.room) {
+    panel.error = '请填写 Bilibili 直播间'
+    return
+  }
+
+  panel.error = ''
+
+  stopBilibiliListen()
+
+  try {
+    const info = await fetchLiveRoomInfo('bilibili', panel.room)
+    panel.roomInfo = info
+
+    await startPlatformRoomInfoMonitor('bilibili')
+
+    if (info.status !== 'live') {
+      panel.status = 0
+      panel.error = '直播未开播'
+      return
+    }
+
+    const roomId = Number(info.roomId)
+    if (!Number.isFinite(roomId)) {
+      throw new Error('Bilibili 房间号解析失败')
+    }
+
+    const cast = new BiliCast(roomId)
+
+    cast.on('open', () => {
+      panel.status = 1
+    })
+
+    cast.on('close', () => {
+      panel.status = 0
+    })
+
+    cast.on('error', (err: Error) => {
+      panel.status = 0
+      panel.error = err.message || 'Bilibili 连接失败'
+    })
+
+    cast.on('message', (msgs: DyMessage[]) => {
+      handleBilibiliMessages(msgs)
+    })
+
+    cast.connect()
+    biliWs = cast
+  } catch (err) {
+    panel.status = 0
+    panel.error = err instanceof Error ? err.message : 'Bilibili 连接失败'
+    biliWs = undefined
+  }
 }
 
 async function startDouyinListen() {
@@ -400,34 +474,14 @@ function setRoomCount(room?: LiveRoom) {
 }
 
 function handleMessages(msgs: DyMessage[]) {
+  const uniqueMsgs: DyMessage[] = []
   try {
     for (const msg of msgs) {
       if (!msg.id || castSet.has(msg.id)) continue
       castSet.add(msg.id)
-
-      const userName = msg.user?.name || '匿名用户'
-      const content =
-        msg.content ||
-        msg.gift?.name ||
-        (msg.likeCount ? `点赞 x${msg.likeCount}` : msg.method || '消息')
+      uniqueMsgs.push(msg)
 
       switch (msg.method) {
-        case CastMethod.CHAT:
-        case CastMethod.EMOJI_CHAT:
-          pushPlatformMessage('douyin', userName, content)
-          break
-        case CastMethod.GIFT:
-          if (!msg.gift?.repeatEnd) {
-            pushPlatformMessage('douyin', userName, `礼物 ${msg.gift?.name || msg.gift?.id} x${msg.gift?.count || 1}`)
-          }
-          break
-        case CastMethod.LIKE:
-          pushPlatformMessage('douyin', userName, `点赞 x${msg.likeCount || 1}`)
-          break
-        case CastMethod.MEMBER:
-        case CastMethod.SOCIAL:
-          pushPlatformMessage('douyin', userName, content)
-          break
         case CastMethod.ROOM_USER_SEQ:
         case CastMethod.ROOM_STATS:
           setRoomCount(msg.room)
@@ -443,8 +497,9 @@ function handleMessages(msgs: DyMessage[]) {
     // keep the live loop resilient
   }
 
-  allCasts.push(...msgs)
-  void handleDanmu(msgs)
+  allCasts.push(...uniqueMsgs)
+  appendPlatformMainCasts('douyin', uniqueMsgs)
+  void handleDanmu(uniqueMsgs)
 
   const douyinPlayers = currentPlay.value
     .filter((item) => !!item.realId)
@@ -455,8 +510,34 @@ function handleMessages(msgs: DyMessage[]) {
   setPlatformPlayers('douyin', douyinPlayers)
 
   if (relayWs && relayWs.isConnected()) {
-    relayWs.send(JSON.stringify(msgs))
+    relayWs.send(JSON.stringify(uniqueMsgs))
   }
+}
+
+function handleBilibiliMessages(msgs: DyMessage[]) {
+  const platform: LivePlatform = 'bilibili'
+  const uniqueMsgs: DyMessage[] = []
+
+  try {
+    for (const msg of msgs) {
+      if (!msg.id || biliCastSet.has(msg.id)) continue
+      biliCastSet.add(msg.id)
+      uniqueMsgs.push(msg)
+    }
+  } catch {
+    // keep the live loop resilient
+  }
+
+  appendPlatformMainCasts(platform, uniqueMsgs)
+  void handleDanmu(uniqueMsgs)
+
+  const players = currentPlay.value
+    .filter((item) => !!item.realId && String(item.realId).startsWith('bili_'))
+    .map((item) => ({
+      realId: item.realId as string,
+      user: item.user,
+    }))
+  setPlatformPlayers(platform, players)
 }
 
 function sendPlatformGift(platform: LivePlatform) {
@@ -506,6 +587,7 @@ async function launchGame() {
 
 function resetGameData() {
   clearCurrentPlay()
+  clearDanmu()
   PLATFORM_ORDER.forEach((platform) => {
     platformPanels.value[platform].players = []
     platformPanels.value[platform].selectedPlayer = ''
@@ -598,6 +680,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopDouyinListen()
+  stopBilibiliListen()
   platformRoomInfoTimers.forEach((timer) => window.clearInterval(timer))
   platformRoomInfoTimers.clear()
   if (stopListening) stopListening()

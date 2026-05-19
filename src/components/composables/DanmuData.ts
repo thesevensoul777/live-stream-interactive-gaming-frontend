@@ -2,12 +2,22 @@ import { ref } from 'vue'
 import type { DyMessage } from '@/core/dycast'
 import type { DanmuCommandDTO } from "@/types/danmu";
 import { syncRank } from '@/api/player'
+import type { LivePlatform } from '@/core/livePlatforms'
 
 const allCasts = ref<DyMessage[]>([])
 const mainCasts = ref<DyMessage[]>([])
 const otherCasts = ref<DyMessage[]>([])
 // 存储当前 1 或 2 的玩家指令
 const currentPlay = ref<DanmuCommandDTO[]>([])
+
+const platformMainCasts = ref<Record<LivePlatform, DyMessage[]>>({
+  douyin: [],
+  bilibili: [],
+  douyu: [],
+  tiktok: [],
+})
+
+const MAX_PLATFORM_CASTS = 800
 
 export function useDanmuStore() {
   
@@ -94,14 +104,36 @@ async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints ?: numb
     allCasts.value.length = 0
     mainCasts.value.length = 0
     otherCasts.value.length = 0
+    ;(Object.keys(platformMainCasts.value) as LivePlatform[]).forEach((platform) => {
+      platformMainCasts.value[platform].length = 0
+    })
+  }
+
+  function appendPlatformMainCasts(platform: LivePlatform, msgs: DyMessage[]) {
+    if (!msgs.length) return
+    const next = platformMainCasts.value[platform].concat(msgs).slice(-MAX_PLATFORM_CASTS)
+    platformMainCasts.value = {
+      ...platformMainCasts.value,
+      [platform]: next,
+    }
+  }
+
+  function clearPlatformMainCasts(platform: LivePlatform) {
+    platformMainCasts.value = {
+      ...platformMainCasts.value,
+      [platform]: [],
+    }
   }
 
   return {
     allCasts,
     mainCasts,
     otherCasts,
+    platformMainCasts,
     currentPlay,
     appendCasts,
+    appendPlatformMainCasts,
+    clearPlatformMainCasts,
     clearDanmu,
     addUniquePlay,
     clearCurrentPlay
