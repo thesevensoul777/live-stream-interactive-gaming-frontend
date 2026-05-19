@@ -46,6 +46,11 @@
 >
  6.启动游戏
 </button>
+    <button
+      @click="restGane"
+    >
+     重置
+    </button>
 
 
     <!-- <button @click="stop">断开</button> -->
@@ -161,7 +166,7 @@ const count = ref<number>(1)
 const gift = ref<string>('463');
 const robotCount = ref<number>(0)
 
-
+let lastRobotContent: string = '2';
 
 // 其它弹幕
 const otherRef = useTemplateRef('otherEl');
@@ -230,7 +235,9 @@ async function launchGame() {
     console.log('游戏启动命令已发送');
   }
 }
-
+async function restGane() {
+clearCurrentPlay()
+}
 
 function connectLive(): void {
   try {
@@ -427,38 +434,39 @@ function send(): void {
 
 
 function addRobot(): void {
-  // 1. 变量声明置顶
+  // 1. 变量声明置顶 (严格遵守：变量必须位于方法顶部)
   let robotId: string;
   let robotNames: string[];
   let randomName: string;
   let mockContent: string;
   let mockMsg: any;
 
-  // 2. 深度拟真昵称池：主打一个“随性”
+  // 2. 深度拟真昵称池
   robotNames = [
-    // --- 没头没脑的情绪类 (最像真人) ---
     "真服了这老六", "想退休版小张", "今天也没睡饱", "别卷了求求了", "能不能别改Bug",
     "心碎修勾", "又是想暴富的一天", "摆烂高手", "正在输入中...", "真的很逊诶",
-
-    // --- 吃货/生活实录类 ---
     "冰美式去冰", "香菜必须加", "糯米糍", "今天吃火锅", "碳水爱好者",
     "麻辣烫不要辣", "微甜奶油", "想喝奶茶了", "干饭第一名", "榴莲爱好者",
-
-    // --- 迷惑行为/黑话类 ---
     "麦门信徒", "肯德基疯狂星期四", "泰裤辣", "真的栓Q", "优雅永不过时",
     "脆皮打工人", "修勾守护者", "纯爱战士", "尊贵的极氪车主", "互联网编外人员",
-
-    // --- 极简/随手打的类 ---
     "。 ", "...", "hhh", "Joker", "十七", 
     "阿白", "大头", "隔壁老王", "陈同学", "某不知名网友"
   ];
 
+  // 3. 逻辑处理
   robotId = "robot_" + Math.floor(Math.random() * 100000);
   randomName = robotNames[Math.floor(Math.random() * robotNames.length)];
   
-  // 3. 模拟逻辑...
-  mockContent = Math.random() > 0.5 ? '1' : '2';
-1
+  // 4. 阵容平衡逻辑：如果上一个是 '1' 就设为 '2'，反之亦然
+  if (lastRobotContent === '1') {
+    mockContent = '2';
+  } else {
+    mockContent = '1';
+  }
+  
+  // 更新外部记录，供下次调用使用
+  lastRobotContent = mockContent;
+
   mockMsg = {
     method: "WebcastChatMessage", 
     content: mockContent,
@@ -472,7 +480,6 @@ function addRobot(): void {
 
   handleDanmu([mockMsg]);
 }
-
 
 
 function openOverlay() {
@@ -506,7 +513,8 @@ onMounted(() => {
           rankPoints: item.RankPoints, // 注意：这里的 Key 要和魔兽传出的对应
           tierPoints: item.TierPoints,
           kills: item.Kills,
-          consumption:item.Consumption
+          consumption:item.Consumption,
+          addGolds:item.addGolds|| 0
         }))
       };
 

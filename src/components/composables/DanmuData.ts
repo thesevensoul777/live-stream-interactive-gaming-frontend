@@ -18,7 +18,7 @@ export function useDanmuStore() {
   }
 
   // 核心逻辑：判断 realId 是否已存在，不存在则存入并返回分数
-async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints: number, golds: number } | null> {
+async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints ?: number, golds: number } | null> {
     // 变量声明置顶
     let isExist: boolean;
     let player: DanmuCommandDTO | undefined;
@@ -43,7 +43,7 @@ async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints: number
                 douyinName: msg.user,
                 gameTypeId: "261CE843-5F44-418A-8D10-E49F5DEB191D",
                 avatarUrl: msg.avatar,
-                golds: msg.golds
+                golds: msg.golds ?? 0
             });
 
             if (res.data.success) {
@@ -70,7 +70,7 @@ async function addUniquePlay(msg: DanmuCommandDTO): Promise<{ tierPoints: number
         }
 
         // 如果 API 失败，返回默认值对象
-        return { rankPoints: 0, golds: 0 };
+        return { tierPoints: 0, golds: 0 };
     }
 
     // 玩家已存在，返回 null

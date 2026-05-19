@@ -27,6 +27,7 @@ export async function handleDanmu(msgs: DyMessage[]) {
   let content: string | undefined;
   let action: string | undefined;
   let points: number | null;
+  let isRobot: boolean; // 新增：用于判断是否为机器人
 
   // 2. 使用 for...of 代替 forEach，以支持循环内的 await
   for (const msg of msgs) {
@@ -64,22 +65,36 @@ export async function handleDanmu(msgs: DyMessage[]) {
       time: msg.time,
       command: action,
       avatar: msg.user?.avatar,
-      tierPoints: 0, // 默认初始值
+      tierPoints: 0, 
+       golds: 0,// 默认初始值
     };
 
     // --- 核心修改点：处理 1 和 2 的去重与分数获取 ---
     if (content === '1' || content === '2') {
-      // 这里的 addUniquePlay 是异步的，等待后端返回分数
-      points = await addUniquePlay(safeMsg);
+
+      isRobot = !!msg.user?.realId?.startsWith("robot_");
+
+      if (!isRobot) {
+    // 这里的 addUniquePlay 是异步的，等待后端返回分数
+      const result = await addUniquePlay(safeMsg);
       
       // 如果返回 null，说明该 realId 已在列表中，直接跳过本次循环
-      if (points === null) {
+      if (result === null) {
         console.warn(`[Handle] 玩家 ${userName} 已存在，跳过发送`);
         continue;
       }
       
       // 将异步拿到的真实分数赋值给 safeMsg
-      safeMsg.tierPoints = points;
+      safeMsg.tierPoints = result.tierPoints;
+     safeMsg.golds = result.golds;
+      }else{
+safeMsg.tierPoints = 0;
+        safeMsg.golds = 0;
+      }
+
+  
+
+
     }
 
     // 只有新玩家或非 1/2 指令才会到达这里，执行 IPC 发送给主进程
