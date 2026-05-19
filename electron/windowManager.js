@@ -30,8 +30,13 @@ class WindowManager {
       : `file://${path.join(this.baseDir, '../dist/index.html')}`;
     
     this.win.loadURL(url);
-    this.win.webContents.openDevTools({ mode: 'detach' });
-    console.log("Preload Path:", this.preloadPath);
+this.win.webContents.on('did-frame-finish-load', () => {
+      // 检查是否已经打开，避免重复触发
+      if (!this.win?.webContents.isDevToolsOpened()) {
+        this.win?.webContents.openDevTools({ mode: 'detach' });
+      }
+    });
+
     return this.win;
 
     

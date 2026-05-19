@@ -46,7 +46,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem('access_token')
     // 如果有 Hash 路由，跳转到登录
-    window.location.hash = '/login'
+    if ((window as any).auth?.clearToken) {
+      (window as any).auth.clearToken()
+    }
+    window.location.hash = '/'
   }
 
   return {

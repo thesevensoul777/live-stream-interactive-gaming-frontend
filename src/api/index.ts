@@ -45,7 +45,7 @@ api.interceptors.response.use(
       // 3. 重定向到登录页（根据你的路由配置）
       // 如果使用 vue-router，建议在这里引入 router 执行 push
       // 或者发送一个全局事件让 App.vue 处理
-      window.location.href = '#/login'; 
+      window.location.href = '#/'; 
     }
 
     return Promise.reject(error);

@@ -68,8 +68,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   injectGame: () =>
     ipcRenderer.invoke('inject-game'),
 
-  fetchLive: (url) =>
-    ipcRenderer.invoke('api:fetch-live', url),
+  fetchLive: (url, headers) =>
+    ipcRenderer.invoke('api:fetch-live', url, headers),
 
   fetchLiveBinary: (url) =>
     ipcRenderer.invoke('api:fetch-binary', url),
@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('buffer', {
   /**
    * Trigger sending player deltas (per game end)
    */
-  sendPlayerDelta: () => ipcRenderer.send('buffer:sendPlayerDelta'),
+  sendPlayerDelta: (deltaList) => ipcRenderer.send('buffer:sendPlayerDelta', deltaList),
 
   /**
    * Flush gifts manually (optional)
@@ -127,7 +127,14 @@ contextBridge.exposeInMainWorld('gameAPI', {
 
 contextBridge.exposeInMainWorld('auth', {
   // 必须在这里定义，渲染进程才能通过 window.auth.setToken 调用
-  setToken: (token) => ipcRenderer.send('auth:setToken', token)
+  setToken: (token) => {
+    authToken = token;
+    ipcRenderer.send('auth:setToken', token);
+  },
+  clearToken: () => {
+    authToken = null;
+    ipcRenderer.send('auth:clearToken');
+  }
 })
 /* ================= Open New Window ================= */
 contextBridge.exposeInMainWorld('newWindow', {

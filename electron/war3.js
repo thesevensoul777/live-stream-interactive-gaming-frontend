@@ -99,7 +99,8 @@ async function writeToWarcraftQueue(filePath, dataString) {
 /**
  * 等待魔兽处理完文件
  */
-async function waitUntilFileReadyByPath(filePath, intervalMs = 100) {
+async function waitUntilFileReadyByPath(filePath, intervalMs = 100, timeoutMs = 10000) {
+    const startedAt = Date.now();
     while (true) {
         if (!fs.existsSync(filePath)) return;
         try {
@@ -112,6 +113,9 @@ async function waitUntilFileReadyByPath(filePath, intervalMs = 100) {
             }
         } catch (err) {
             // 文件占用时略过本次循环
+        }
+        if (Date.now() - startedAt > timeoutMs) {
+            throw new Error(`等待魔兽队列文件释放超时: ${filePath}`);
         }
         await new Promise(r => setTimeout(r, intervalMs));
     }

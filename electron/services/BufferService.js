@@ -7,6 +7,7 @@ export class BufferService {
     this.giftFlushing = false
     this.giftTimer = null
     this.authToken = null
+    this.apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:5150'
 
     /* ================= game config ================= */
     this.gamePath = '' // 新增：用于存储魔兽争霸路径
@@ -21,11 +22,12 @@ export class BufferService {
    * ================================================= */
 
 
-    setAuthToken(token) {
-      if(this.authToken==null){
-    this.authToken = token;
-      }
+  setAuthToken(token) {
+    this.authToken = token || null
+  }
 
+  clearAuthToken() {
+    this.authToken = null
   }
 
 
@@ -76,7 +78,7 @@ export class BufferService {
 
     try {
          if (!this.authToken) throw new Error('No Authorization token')
-    const res = await fetch('http://localhost:5150/gift/batchUpdate', {
+    const res = await fetch(`${this.apiBaseUrl}/gift/batchUpdate`, {
   method: 'POST',
   headers: { 
     'Content-Type': 'application/json',
@@ -111,7 +113,7 @@ if (!res.ok) {
     if (!deltaList || !deltaList.length) return
 
     try {
-      await fetch('https://api.yourserver.com/player-delta/summary', {
+      await fetch(`${this.apiBaseUrl}/player-delta/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' ,  'Authorization': 'Bearer ' + this.authToken},
         body: JSON.stringify({ playerDeltas: deltaList })
@@ -151,7 +153,7 @@ if (!res.ok) {
       window.addEventListener('beforeunload', () => {
         if (this.giftBuffer.length > 0) {
           navigator.sendBeacon(
-            'https://api.yourserver.com/gift/batch',
+            `${this.apiBaseUrl}/gift/batch`,
             JSON.stringify({ gifts: this.giftBuffer })
           )
         }
