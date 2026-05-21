@@ -1,6 +1,7 @@
 // electron/services/BilibiliLiveService.js
 import { net, session } from 'electron';
 import { LiveWS } from 'bilibili-live-ws';
+import { BilibiliApiClient } from 'bilibili-live-danmaku';
 
 // 最大重连次数
 const MAX_RECONNECT_COUNT = 30;
@@ -70,16 +71,49 @@ export class BilibiliLiveService {
         }
         response.on('data', (chunk) => { data += chunk.toString(); });
         response.on('end', () => {
-          try { 
-            resolve(JSON.parse(data)); 
-          } catch (err) { 
-            reject(new Error('非标准JSON格式')); 
+          try {
+            resolve(JSON.parse(data));
+          } catch (err) {
+            reject(new Error('非标准JSON格式'));
           }
         });
       });
       request.on('error', (error) => reject(error));
       request.end();
     });
+  }
+
+  /**
+   * 使用 bilibili-live-danmaku 的 BilibiliApiClient 获取认证后的弹幕配置
+   * 该客户端自动处理 WBI 签名、Cookie 管理等认证细节
+   */
+  async _fetchDanmuInfoWithClient(realRoomId) {
+    // 从沙盒中读取所有 B 站 Cookie，构建 Cookie 字符串
+    const cookies = await this.session.cookies.get({ domain: '.bilibili.com' });
+    const cookieMap = {};
+    for (const c of cookies) {
+      cookieMap[c.name] = c.value;
+    }
+
+    // 创建 BilibiliApiClient 实例，注入沙盒中的 Cookie
+    const apiClient = new BilibiliApiClient({
+      cookie: cookieMap,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    });
+
+    // 调用 xliveGetDanmuInfo 获取弹幕配置（自动处理 WBI 签名）
+    const result = await apiClient.xliveGetDanmuInfo({ id: realRoomId });
+    const data = result.data;
+
+    const hostList = data?.host_list || data?.host_server_list || [];
+    const host = hostList[0]?.host || data?.host;
+    const key = data?.token;
+    if (!host || !key) {
+      throw new Error('getDanmuInfo 返回数据缺少 host 或 token');
+    }
+
+    const address = `wss://${host}/sub`;
+    return { key, host, address, realRoomId, hostList, isAuthenticated: true };
   }
 
   /**
@@ -140,6 +174,9 @@ export class BilibiliLiveService {
 
   /**
    * 专属沙盒拉取弹幕服务器配置
+   * 使用新 API (xlive/web-room/v1/index/getDanmuInfo) 获取认证后的 token，
+   * 配合真实 UID 可获取完整用户信息（未遮挡昵称、真实头像）
+   * @returns {{ key: string, host: string, address: string, realRoomId: number, hostList: Array, isAuthenticated: boolean }}
    */
   async _fetchBilibiliDanmuConf(roomId) {
     const timestamp = Date.now();
@@ -152,22 +189,29 @@ export class BilibiliLiveService {
     const realRoomId = initData.data.room_id;
     console.log(`[BiliLive-${this.instanceId}] 🎯 房间号映射: ${roomId} -> ${realRoomId}`);
 
-    const danmuData = await this._electronBiliFetch(
-      `https://api.live.bilibili.com/room/v1/Danmu/getConf?room_id=${encodeURIComponent(String(realRoomId))}&platform=pc&player=web&web_location=102&_=${timestamp}`
-    );
-    if (danmuData.code !== 0) {
-      throw new Error(`getConf 失败: ${danmuData.message || danmuData.msg} (code=${danmuData.code})`);
+    // 使用 bilibili-live-danmaku 的 BilibiliApiClient 获取认证后的弹幕配置
+    // 该客户端自动处理 WBI 签名，确保 API 调用成功
+    try {
+      const authConf = await this._fetchDanmuInfoWithClient(realRoomId);
+      console.log(`[BiliLive-${this.instanceId}] ✅ 新 API getDanmuInfo 成功（已认证）`);
+      return authConf;
+    } catch (authErr) {
+      // 如果新 API 失败（如 WBI 签名失败），降级到旧 API（匿名模式）
+      console.warn(`[BiliLive-${this.instanceId}] ⚠️ 新 API getDanmuInfo 失败: ${authErr.message}，降级到旧 API getConf（匿名模式）`);
+      const fallbackData = await this._electronBiliFetch(
+        `https://api.live.bilibili.com/room/v1/Danmu/getConf?room_id=${encodeURIComponent(String(realRoomId))}&platform=pc&player=web&web_location=102&_=${timestamp}`
+      );
+      if (fallbackData.code !== 0) {
+        throw new Error(`getConf 降级也失败: ${fallbackData.message || fallbackData.msg} (code=${fallbackData.code})`);
+      }
+      const fallbackHostList = fallbackData.data?.host_server_list || [];
+      const fallbackHost = fallbackHostList[0]?.host || fallbackData.data?.host;
+      const fallbackKey = fallbackData.data?.token;
+      if (!fallbackHost || !fallbackKey) {
+        throw new Error('getConf 返回数据缺少 host 或 token');
+      }
+      return { key: fallbackKey, host: fallbackHost, address: `wss://${fallbackHost}/sub`, realRoomId, hostList: fallbackHostList, isAuthenticated: false };
     }
-
-    const hostList = danmuData.data?.host_server_list || [];
-    const host = hostList[0]?.host || danmuData.data?.host;
-    const key = danmuData.data?.token;
-    if (!host || !key) {
-      throw new Error('getConf 返回数据缺少 host 或 token');
-    }
-
-    const address = `wss://${host}/sub`;
-    return { key, host, address, realRoomId, hostList };
   }
 
   /**
@@ -205,9 +249,10 @@ export class BilibiliLiveService {
       const address = conf.address;
       console.log(`[BiliLive-${this.instanceId}] 🔗 正在握手 WebSocket 管道 #${this.totalReconnectCount + 1} | ${address}`);
 
-      // 使用 0 (匿名) 作为 UID，避免 token 与 UID 不匹配导致连接被拒绝
-      // 弹幕数据中的用户信息通过 Cookie 中的 SESSDATA 来获取完整身份
-      const activeUid = 0;
+      // 使用真实 UID（如果已登录且新 API 成功获取了认证 token），让服务器返回完整的用户信息
+      // 如果未登录或新 API 失败（降级到旧 API），则使用 0（匿名模式，名字会有星号遮挡）
+      // 注意：旧 API 返回的 token 是匿名 token，使用真实 UID 会导致服务器拒绝连接
+      const activeUid = (this.credentials?.DEDEUSERID && conf.isAuthenticated) ? Number(this.credentials.DEDEUSERID) : 0;
 
       this.ws = new LiveWS(conf.realRoomId, {
         protover: 2,
@@ -257,15 +302,14 @@ export class BilibiliLiveService {
   }
 
   /**
-   * 精简分发器：只处理 DANMU_MSG 和 BATCH_COMMAND，不漏弹幕
+   * 精简分发器：只处理 BATCH_COMMAND（批量弹幕），不漏弹幕
+   * 注意：DANMU_MSG 由 DANMU_MSG 事件监听器直接处理，避免重复
    */
   _dispatchCommand(packet) {
     if (!packet) return;
     const cmd = packet.cmd || packet.msg?.cmd || '';
     
-    if (cmd.startsWith('DANMU_MSG')) {
-      this._parseAndPrintDanmu(packet);
-    } else if (cmd === 'BATCH_COMMAND' && Array.isArray(packet.data?.list)) {
+    if (cmd === 'BATCH_COMMAND' && Array.isArray(packet.data?.list)) {
       for (const subPacket of packet.data.list) {
         if (subPacket?.cmd?.startsWith('DANMU_MSG')) {
           this._parseAndPrintDanmu(subPacket);

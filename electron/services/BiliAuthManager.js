@@ -95,6 +95,8 @@ export async function ensureUserAuthenticated(userId) {
       console.error(`[BiliAuth-${userId}] ❌ 页面加载失败 [${errorCode}] ${errorDescription} — URL: ${validatedURL}`);
     });
 
+    let resolved = false;
+
     // 轮询检测 Cookie 是否写入（用户扫码登录后 B 站会设置 Cookie）
     const checker = setInterval(async () => {
       if (loginWin.isDestroyed()) {
@@ -106,6 +108,7 @@ export async function ensureUserAuthenticated(userId) {
         const currentCredentials = await getCredentialsFromSession(userSession);
         if (currentCredentials.SESSDATA && currentCredentials.DEDEUSERID) {
           clearInterval(checker);
+          resolved = true;
           console.log(`[BiliAuth-${userId}] 🎉 主播扫码登录成功！UID: ${currentCredentials.DEDEUSERID}`);
 
           if (!loginWin.isDestroyed()) {
@@ -120,7 +123,10 @@ export async function ensureUserAuthenticated(userId) {
 
     loginWin.on('closed', () => {
       clearInterval(checker);
-      reject(new Error('主播取消了登录。'));
+      // 如果已经 resolve 过了（登录成功后被 destroy），不再 reject
+      if (!resolved) {
+        reject(new Error('主播取消了登录。'));
+      }
     });
   });
 }
