@@ -14,7 +14,6 @@ let authToken = null;
 
 
 
-
 /* ================= Existing Electron API ================= */
 contextBridge.exposeInMainWorld('electronAPI', {
 
@@ -23,16 +22,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // 1. 修改为 invoke，确保主窗口知道同步成功
   syncCurrentPlay: (players) => ipcRenderer.invoke('sync-players-to-main', players),
 
-  // 2. 这里的 on 必须保留，因为 Overlay 窗口是在“被动接收”消息
+  // 2. 这里的 on 必须保留，因为 Overlay 窗口是在"被动接收"消息
   onSyncPlayers: (callback) => {
     ipcRenderer.removeAllListeners('update-players-to-overlay');
     ipcRenderer.on('update-players-to-overlay', (_event, value) => callback(value));
   },
  /**
-   * 游戏结算数据监听
-   * @param onSummaryReceived 结算回调函数
-   * @returns {Function} 清理函数
-   */
+  * 游戏结算数据监听
+  * @param onSummaryReceived 结算回调函数
+  * @returns {Function} 清理函数
+  */
   onGameSummary: (onSummaryReceived) => {
     const summarySub = (_event, data) => onSummaryReceived(data);
     
@@ -95,6 +94,100 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('brotli:decompress', data);
   },
 
+  // ════════════════════════════════════════════════════════════════
+  // Bilibili 弹幕监控 API (主播独立凭证模式)
+  // ════════════════════════════════════════════════════════════════
+
+  /**
+   * 检查指定主播的 B 站登录状态
+   * @param {string} userId 主播唯一标识
+   * @returns {Promise<{ok: boolean, authenticated: boolean, error?: string}>}
+   */
+  biliCheckAuth: (userId) => ipcRenderer.invoke('bili:check-auth', userId),
+
+  /**
+   * 启动 B 站弹幕监控（如果未登录会自动弹出扫码窗口）
+   * @param {{userId: string, targetRoomId: string|number}} params
+   * @returns {Promise<{ok: boolean, userId?: string, targetRoomId?: string, error?: string}>}
+   */
+  biliStartMonitor: (params) => ipcRenderer.invoke('bili:start-monitor', params),
+
+  /**
+   * 停止指定主播的 B 站弹幕监控
+   * @param {string} userId
+   * @returns {Promise<{ok: boolean, error?: string}>}
+   */
+  biliStopMonitor: (userId) => ipcRenderer.invoke('bili:stop-monitor', userId),
+
+  /**
+   * 清除指定主播的 B 站登录态
+   * @param {string} userId
+   * @returns {Promise<{ok: boolean, error?: string}>}
+   */
+  biliClearAuth: (userId) => ipcRenderer.invoke('bili:clear-auth', userId),
+
+  /**
+   * 获取当前所有活跃的监控列表
+   * @returns {Promise<{ok: boolean, monitors: Array<{userId: string, roomId: string}>}>}
+   */
+  biliGetActiveMonitors: () => ipcRenderer.invoke('bili:get-active-monitors'),
+
+  /**
+   * 监听指定主播的弹幕数据
+   * @param {string} userId
+   * @param {Function} callback (danmu: {uid, username, content, faceUrl}) => void
+   * @returns {Function} 清理函数
+   */
+  onBiliDanmu: (userId, callback) => {
+    const channel = `bili:danmu-${userId}`;
+    ipcRenderer.removeAllListeners(channel);
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  /**
+   * 监听指定主播的礼物数据
+   * @param {string} userId
+   * @param {Function} callback (gift) => void
+   * @returns {Function} 清理函数
+   */
+  onBiliGift: (userId, callback) => {
+    const channel = `bili:gift-${userId}`;
+    ipcRenderer.removeAllListeners(channel);
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  /**
+   * 监听指定主播的监控状态变化
+   * @param {string} userId
+   * @param {Function} callback (status) => void
+   * @returns {Function} 清理函数
+   */
+  onBiliStatus: (userId, callback) => {
+    const channel = `bili:status-${userId}`;
+    ipcRenderer.removeAllListeners(channel);
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  /**
+   * 监听指定主播的监控错误
+   * @param {string} userId
+   * @param {Function} callback (error: {message: string}) => void
+   * @returns {Function} 清理函数
+   */
+  onBiliError: (userId, callback) => {
+    const channel = `bili:error-${userId}`;
+    ipcRenderer.removeAllListeners(channel);
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
 });
 
 
@@ -154,7 +247,7 @@ contextBridge.exposeInMainWorld('newWindow', {
    * 关闭特效/绿幕窗口
    */
   closeOverlay: () => ipcRenderer.send('close-overlay'),
-// Vue 调用这个方法来开启“监听模式”
+// Vue 调用这个方法来开启"监听模式"
   listening: (onGiftReceived, onLikeReceived) => {
     
     // 监听礼物

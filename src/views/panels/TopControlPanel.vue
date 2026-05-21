@@ -159,8 +159,6 @@ import {
   type LivePlatform,
   type LiveRoomInfo as PlatformRoomInfo,
 } from '@/core/livePlatforms'
-import { BiliCast } from '@/core/bilicast'
-import { debug } from 'console'
 
 type PlatformPlayer = {
   realId: string
@@ -230,11 +228,13 @@ let stopListening: (() => void) | undefined
 let castWs: DyCast | undefined
 let relayWs: RelayCast | undefined
 const castSet = new Set<string>()
-const biliCastSet = new Set<string>()
-let biliWs: BiliCast | undefined
 const allCasts: DyMessage[] = []
 const platformRoomInfoTimers = new Map<LivePlatform, number>()
 let lastRobotContent = '2'
+
+// ── Bilibili IPC 监控状态 ──
+let biliUserId: string | null = null
+let biliCleanupFns: (() => void)[] = []
 
 function pushPlatformMessage(platform: LivePlatform, userName: string, content: string) {
   const panel = platformPanels.value[platform]
@@ -312,11 +312,18 @@ function stopDouyinListen() {
 }
 
 function stopBilibiliListen() {
-  if (biliWs) {
-    biliWs.close()
-    biliWs = undefined
+  // 清理 IPC 监听器
+  for (const fn of biliCleanupFns) {
+    fn()
   }
-  biliCastSet.clear()
+  biliCleanupFns = []
+
+  // 通知主进程停止监控
+  if (biliUserId) {
+    ;(window as any).electronAPI?.biliStopMonitor(biliUserId).catch(() => {})
+    biliUserId = null
+  }
+
   clearPlatformMainCasts('bilibili')
   platformPanels.value.bilibili.status = 0
   platformPanels.value.bilibili.messages = []
@@ -378,49 +385,95 @@ async function startBilibiliListen() {
       return
     }
 
-    const roomId = Number(info.roomId)
-    if (!Number.isFinite(roomId)) {
-      throw new Error('Bilibili 房间号解析失败')
+    // 使用当前登录用户的 ID 作为 Bilibili 监控的 userId
+    const currentUser = authStore.user
+    if (!currentUser || !currentUser.id) {
+      panel.status = 0
+      panel.error = '请先登录'
+      return
     }
 
-    const cast = new BiliCast(roomId)
+    const userId = currentUser.id
+    const targetRoomId = info.roomId
 
-    cast.on('open', () => {
-      panel.status = 1
-      panel.error = ''
+    // 通过 IPC 通知主进程启动 Bilibili 弹幕监控
+    const result = await (window as any).electronAPI.biliStartMonitor({ userId, targetRoomId })
+    if (!result.ok) {
+      panel.status = 0
+      panel.error = result.error || 'Bilibili 监控启动失败'
+      return
+    }
+
+    biliUserId = userId
+
+    // 监听弹幕数据
+    const cleanupDanmu = (window as any).electronAPI.onBiliDanmu(userId, (danmu: any) => {
+      // 将主进程传来的弹幕数据转换为 DyMessage 格式
+      const msg: DyMessage = {
+        id: `bili-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        method: CastMethod.CHAT,
+        user: {
+          realId: danmu.uid ? `bili_${danmu.uid}` : undefined,
+          id: String(danmu.uid || ''),
+          name: danmu.username || '匿名用户',
+          avatar: danmu.faceUrl || '',
+        },
+        content: danmu.content || '',
+        time: Date.now(),
+      }
+      handleBilibiliMessages([msg])
     })
+    biliCleanupFns.push(cleanupDanmu)
 
-    cast.on('close', () => {
-      if (!cast['isReconnecting']) {
+    // 监听礼物数据
+    const cleanupGift = (window as any).electronAPI.onBiliGift(userId, (gift: any) => {
+      const msg: DyMessage = {
+        id: `bili-gift-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        method: CastMethod.GIFT,
+        user: {
+          realId: gift.uid ? `bili_${gift.uid}` : undefined,
+          id: String(gift.uid || ''),
+          name: gift.username || '匿名用户',
+          avatar: gift.faceUrl || '',
+        },
+        gift: {
+          id: gift.giftId || 'unknown',
+          name: gift.giftName || '礼物',
+          count: gift.count || 1,
+          repeatEnd: 1,
+          icon: gift.giftIcon || '',
+          price: gift.price || 0,
+        },
+        time: Date.now(),
+      }
+      handleBilibiliMessages([msg])
+    })
+    biliCleanupFns.push(cleanupGift)
+
+    // 监听状态变化
+    const cleanupStatus = (window as any).electronAPI.onBiliStatus(userId, (status: any) => {
+      if (status.type === 'connected' || status.type === 'authenticated') {
+        panel.status = 1
+        panel.error = ''
+      } else if (status.type === 'disconnected' || status.type === 'max_reconnect_exceeded') {
         panel.status = 0
+        panel.error = status.type === 'max_reconnect_exceeded' ? 'Bilibili 重连失败' : 'Bilibili 已断开'
       }
     })
+    biliCleanupFns.push(cleanupStatus)
 
-    cast.on('error', (err: Error) => {
+    // 监听错误
+    const cleanupError = (window as any).electronAPI.onBiliError(userId, (error: any) => {
       panel.status = 0
-      panel.error = err.message || 'Bilibili 连接失败'
+      panel.error = error.message || 'Bilibili 连接错误'
     })
+    biliCleanupFns.push(cleanupError)
 
-    cast.on('reconnecting', (attempt: number) => {
-      panel.status = 0
-      panel.error = `Bilibili 连接断开，正在重连 (${attempt}/5)...`
-    })
-
-    cast.on('reconnect', () => {
-      panel.status = 1
-      panel.error = ''
-    })
-
-    cast.on('message', (msgs: DyMessage[]) => {
-      handleBilibiliMessages(msgs)
-    })
-
-    cast.connect()
-    biliWs = cast
+    panel.status = 1
+    panel.error = ''
   } catch (err) {
     panel.status = 0
     panel.error = err instanceof Error ? err.message : 'Bilibili 连接失败'
-    biliWs = undefined
   }
 }
 
@@ -528,15 +581,12 @@ function handleMessages(msgs: DyMessage[]) {
 }
 
 function handleBilibiliMessages(msgs: DyMessage[]) {
- 
   const platform: LivePlatform = 'bilibili'
   const uniqueMsgs: DyMessage[] = []
 
   try {
     for (const msg of msgs) {
-      if (!msg.id || biliCastSet.has(msg.id)) continue
-  
-      biliCastSet.add(msg.id)
+      if (!msg.id) continue
       uniqueMsgs.push(msg)
     }
   } catch {
@@ -578,7 +628,6 @@ function sendPlatformGift(platform: LivePlatform) {
 
 async function chooseFolder() {
   const result = await (window as any).fileAPI.selectFolder()
-   debugger;
   if (result) {
     path.value = result
     confirmed.value = true
@@ -843,7 +892,7 @@ input[type='number'] {
   transition: all 0.2s ease;
 }
 
-/* 2. ✨ 核心修复：显式定义“启动游戏”按钮在禁用状态下的样子 */
+/* 2. ✨ 核心修复：显式定义"启动游戏"按钮在禁用状态下的样子 */
 .btn-launch:disabled {
   background: #bcccf6 !important; /* 变成淡淡的蓝色，表示不可点击 */
   color: #ffffff !important;       /* 强制文字为白色，绝对不会变空白！ */

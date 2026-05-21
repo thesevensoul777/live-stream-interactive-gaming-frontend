@@ -8,6 +8,8 @@ import {
   saveGift,
   saveLike,
 } from './war3.js';
+import { ensureUserAuthenticated, clearUserAuth, isUserAuthenticated } from './services/BiliAuthManager.js';
+import { BilibiliLiveService } from './services/BilibiliLiveService.js';
 
 function netGetText(url, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -74,7 +76,7 @@ async function nodeFetchBuffer(url, headers = {}) {
   return Buffer.from(ab);
 }
 
-export function registerIpcHandlers(win, bufferService, windowManager) {
+export function registerIpcHandlers(win, bufferService, windowManager, activeMonitors = new Map()) {
   ipcMain.handle('add-command', async (_event, payload) => {
     try {
       await saveCommand(payload);
@@ -244,5 +246,133 @@ export function registerIpcHandlers(win, bufferService, windowManager) {
       console.error('[brotli:decompress failed]', err);
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // Bilibili 弹幕监控 IPC 处理器
+  // ════════════════════════════════════════════════════════════════
+
+  /**
+   * 检查指定主播的 B 站登录状态
+   * 渲染进程调用: window.electronAPI.biliCheckAuth(userId)
+   */
+  ipcMain.handle('bili:check-auth', async (_event, userId) => {
+    try {
+      const authenticated = await isUserAuthenticated(userId);
+      return { ok: true, authenticated };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  /**
+   * 启动主播的 B 站弹幕监控
+   * 渲染进程调用: window.electronAPI.biliStartMonitor({ userId, targetRoomId })
+   * 
+   * 流程：
+   * 1. 检查/获取主播的 B 站登录凭证（未登录则弹出扫码窗口）
+   * 2. 如果该主播已有监控实例，先关闭旧的
+   * 3. 创建新的 BilibiliLiveService 实例并连接
+   * 4. 弹幕数据通过 IPC 回传给渲染进程
+   */
+  ipcMain.handle('bili:start-monitor', async (event, { userId, targetRoomId }) => {
+    try {
+      // 1. 获取主播的登录凭证（如果未登录会弹出扫码窗口）
+      const credentials = await ensureUserAuthenticated(userId);
+
+      // 2. 如果该主播已有监控实例，先关闭
+      if (activeMonitors.has(userId)) {
+        console.log(`[IPC] 主播 ${userId} 已有监控实例，正在关闭旧的...`);
+        activeMonitors.get(userId).close();
+        activeMonitors.delete(userId);
+      }
+
+      // 3. 创建新的弹幕服务实例
+      const service = new BilibiliLiveService(userId, {
+        onDanmu: (danmu) => {
+          // 弹幕数据回传给渲染进程
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(`bili:danmu-${userId}`, danmu);
+          }
+        },
+        onGift: (gift) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(`bili:gift-${userId}`, gift);
+          }
+        },
+        onStatus: (status) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(`bili:status-${userId}`, status);
+          }
+        },
+        onError: (error) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(`bili:error-${userId}`, {
+              message: error.message || String(error),
+            });
+          }
+        },
+      });
+
+      activeMonitors.set(userId, service);
+
+      // 4. 用主播自己的账号身份，去监听指定的 targetRoomId
+      await service.connect(targetRoomId, credentials);
+
+      return { ok: true, userId, targetRoomId };
+    } catch (err) {
+      console.error(`[IPC] bili:start-monitor 失败:`, err.message);
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  /**
+   * 停止指定主播的 B 站弹幕监控
+   * 渲染进程调用: window.electronAPI.biliStopMonitor(userId)
+   */
+  ipcMain.handle('bili:stop-monitor', async (_event, userId) => {
+    try {
+      if (activeMonitors.has(userId)) {
+        activeMonitors.get(userId).close();
+        activeMonitors.delete(userId);
+        console.log(`[IPC] 主播 ${userId} 的弹幕监控已停止。`);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  /**
+   * 清除指定主播的 B 站登录态
+   * 渲染进程调用: window.electronAPI.biliClearAuth(userId)
+   */
+  ipcMain.handle('bili:clear-auth', async (_event, userId) => {
+    try {
+      // 先停止监控
+      if (activeMonitors.has(userId)) {
+        activeMonitors.get(userId).close();
+        activeMonitors.delete(userId);
+      }
+      await clearUserAuth(userId);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  /**
+   * 获取当前所有活跃的监控列表
+   * 渲染进程调用: window.electronAPI.biliGetActiveMonitors()
+   */
+  ipcMain.handle('bili:get-active-monitors', async () => {
+    const monitors = [];
+    for (const [userId, service] of activeMonitors) {
+      monitors.push({
+        userId,
+        roomId: service.roomId,
+      });
+    }
+    return { ok: true, monitors };
   });
 }
