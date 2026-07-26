@@ -1,21 +1,26 @@
 <template>
   <div class="login-inner-container">
     <div class="form-card">
-      <h2>{{ isLogin ? '登录' : '注册' }}</h2>
+      <div class="form-header">
+        <h2>{{ isLogin ? t('login.login') : t('login.register') }}</h2>
+        <button type="button" class="language-btn" @click="toggleLanguage">
+          {{ locale === 'zh' ? t('common.switchToEnglish') : t('common.switchToChinese') }}
+        </button>
+      </div>
 
       <form @submit.prevent="handleSubmit">
         <input 
           class="form-input" 
           v-model.trim="formData.username" 
           type="text" 
-          placeholder="账号" 
+          :placeholder="t('login.username')" 
           required 
         />
         <input 
           class="form-input" 
           v-model="formData.password" 
           type="password" 
-          placeholder="密码" 
+          :placeholder="t('login.password')" 
           required 
         />
 
@@ -24,31 +29,31 @@
             class="form-input" 
             v-model="formData.confirmPassword" 
             type="password" 
-            placeholder="重复密码" 
+            :placeholder="t('login.confirmPassword')" 
             required 
           />
           <input 
             class="form-input" 
             v-model.trim="formData.douyin" 
             type="text" 
-            placeholder="抖音号" 
+            :placeholder="t('login.douyin')" 
             required 
           />
           <input 
             class="form-input" 
             v-model.trim="formData.ActivationCode" 
             type="text" 
-            placeholder="账号卡密" 
+            :placeholder="t('login.activationCode')" 
             required 
           />
         </template>
 
         <div class="btn-group">
           <button type="submit" :disabled="loading" class="primary-btn">
-            {{ loading ? '提交中...' : (isLogin ? '登录' : '提交注册') }}
+            {{ loading ? t('login.loading') : (isLogin ? t('login.loginBtn') : t('login.registerBtn')) }}
           </button>
           <button type="button" @click="toggleForm" :disabled="loading">
-            {{ isLogin ? '去注册' : '返回登录' }}
+            {{ isLogin ? t('login.goRegister') : t('login.backLogin') }}
           </button>
         </div>
       </form>
@@ -59,9 +64,11 @@
 <script lang="ts" setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router' // 引入路由
+import { useI18n } from 'vue-i18n'
 import { registerApi, loginApi } from '@/api/auth'
 
 const router = useRouter() // 获取路由实例
+const { t, locale } = useI18n()
 const isLogin = ref(true)
 const loading = ref(false)
 
@@ -94,15 +101,19 @@ const toggleForm = () => {
   })
 }
 
+const toggleLanguage = () => {
+  locale.value = locale.value === 'zh' ? 'en' : 'zh'
+}
+
 const handleSubmit = async () => {
   if (loading.value) return
 
   // 基础校验
-  if (!formData.username || !formData.password) return alert('请填写账号和密码')
+  if (!formData.username || !formData.password) return alert(t('login.validationRequired'))
   
   if (!isLogin.value) {
-    if (formData.password !== formData.confirmPassword) return alert('密码不一致')
-    if (!formData.douyin) return alert('请填写抖音号')
+    if (formData.password !== formData.confirmPassword) return alert(t('login.passwordMismatch'))
+    if (!formData.douyin) return alert(t('login.douyinRequired'))
   }
 
   loading.value = true
@@ -127,7 +138,7 @@ const handleSubmit = async () => {
         // 使用路由跳转到主界面
         router.push('/main'); 
       } else {
-        throw new Error('登录响应数据异常');
+        throw new Error(t('login.invalidLoginResponse'));
       }
     } else {
       // 执行注册
@@ -137,11 +148,11 @@ const handleSubmit = async () => {
         douyinAccount: formData.douyin,
         ActivationCode: formData.ActivationCode
       })
-      alert('注册成功')
+      alert(t('login.registerSuccess'))
       toggleForm()
     }
   } catch (err: any) {
-    alert(err.response?.data?.message || err.message || '操作失败')
+    alert(err.response?.data?.message || err.message || t('login.operationFailed'))
   } finally {
     loading.value = false
   }
@@ -170,10 +181,24 @@ const handleSubmit = async () => {
   margin: 20px; 
 }
 
+.form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 h2 {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin: 0;
   color: #333;
+}
+
+.language-btn {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.9rem;
 }
 
 .form-input {

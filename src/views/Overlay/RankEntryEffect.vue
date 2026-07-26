@@ -11,7 +11,7 @@
               <img :src="activeEntry.avatar" class="user-avatar" />
             </div>
             <div class="rank-info">
-              <div class="rank-text">世界排名第 {{ activeEntry.rank }} 位</div>
+              <div class="rank-text">{{ t('overlay.worldRank', { rank: activeEntry.rank }) }}</div>
               <div class="user-name">{{ activeEntry.user }}</div>
             </div>
           </div>
@@ -30,9 +30,9 @@
           <div class="small-info">
             <div class="small-top">
               <span class="small-name">{{ activeEntry.user }}</span>
-              <span class="small-label">驾临</span>
+              <span class="small-label">{{ t('overlay.arrived') }}</span>
             </div>
-            <div class="small-rank-text">世界排名第 {{ activeEntry.rank }} 位</div>
+            <div class="small-rank-text">{{ t('overlay.worldRank', { rank: activeEntry.rank }) }}</div>
           </div>
         </div>
       </div>
@@ -46,8 +46,10 @@ import rank1Frame from '@/assets/ranks/1.webp'
 import rank2Frame from '@/assets/ranks/2.webp'
 import rank3Frame from '@/assets/ranks/3.webp'
 import otherRankFrame from '@/assets/ranks/otherRank.png'
+import { useI18n } from 'vue-i18n'
 
 // --- 变量声明置顶 ---
+const { t } = useI18n()
 const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
 const activeEntry = ref<any>(null)
 const queue: any[] = [] 

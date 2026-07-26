@@ -5,7 +5,7 @@
       :class="{ active: active === 'war3' }"
       @click="$emit('change', 'war3')"
     >
-      军团大战
+      {{ t('sidebar.legionWar') }}
     </div>
 <!-- 
     <div
@@ -13,12 +13,16 @@
       :class="{ active: active === 'sc' }"
       @click="$emit('change', 'sc')"
     >
-      星际争霸
+      {{ t('sidebar.starCraft') }}
     </div> -->
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 defineProps<{
   active: 'war3' | 'sc'
 }>()

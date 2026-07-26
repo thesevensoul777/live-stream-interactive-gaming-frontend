@@ -6,16 +6,16 @@ import { DynamicScroller, DynamicScrollerItem } from 'vue3-virtual-scroller'
 import 'vue3-virtual-scroller/dist/vue3-virtual-scroller.css'
 import { createPinia } from 'pinia'
 import router from './router/index' 
+import i18n from './i18n'
 
 const app = createApp(App)
 const pinia = createPinia()
 
-// 全局注册虚拟滚动组件
 app.component('DynamicScroller', DynamicScroller)
 app.component('DynamicScrollerItem', DynamicScrollerItem)
 
-// 先挂载 Pinia，再挂载路由，最后 Mount
 app.use(pinia)
 app.use(router)
+app.use(i18n)
 
 app.mount('#app')

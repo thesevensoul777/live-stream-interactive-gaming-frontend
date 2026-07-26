@@ -302,17 +302,26 @@ export class BilibiliLiveService {
   }
 
   /**
-   * 精简分发器：只处理 BATCH_COMMAND（批量弹幕），不漏弹幕
+   * 精简分发器：处理 BATCH_COMMAND（批量弹幕）和 SEND_GIFT（礼物）
    * 注意：DANMU_MSG 由 DANMU_MSG 事件监听器直接处理，避免重复
    */
   _dispatchCommand(packet) {
     if (!packet) return;
     const cmd = packet.cmd || packet.msg?.cmd || '';
     
+    // 处理单条 SEND_GIFT 礼物消息
+    if (cmd === 'SEND_GIFT') {
+      this._parseAndEmitGift(packet.data);
+      return;
+    }
+
     if (cmd === 'BATCH_COMMAND' && Array.isArray(packet.data?.list)) {
       for (const subPacket of packet.data.list) {
-        if (subPacket?.cmd?.startsWith('DANMU_MSG')) {
+        const subCmd = subPacket?.cmd || '';
+        if (subCmd.startsWith('DANMU_MSG')) {
           this._parseAndPrintDanmu(subPacket);
+        } else if (subCmd === 'SEND_GIFT') {
+          this._parseAndEmitGift(subPacket.data);
         }
       }
     }
@@ -336,7 +345,7 @@ export class BilibiliLiveService {
       // 3. 获取弹幕内容
       const content = info[1] || '';
 
-      // 4. 获取用户头像 URL 
+      // 4. 获取用户头像 URL
       let faceUrl = '';
       if (info[0] && info[0][15] && typeof info[0][15] === 'object') {
         faceUrl = info[0][15]?.user_face || '';
@@ -355,6 +364,73 @@ export class BilibiliLiveService {
 
     } catch (parseErr) {
       // 容错
+    }
+  }
+
+  /**
+   * 🎁 Bilibili 礼物解析器
+   * 解析 SEND_GIFT 命令的 data 字段，提取完整的礼物信息
+   * 通过 onGift 回调发送给调用方（IPC 层负责转发到前端和 BufferService）
+   */
+  _parseAndEmitGift(data) {
+    if (!data) return;
+
+    try {
+      const giftId = String(data.giftId || '');
+      const giftName = data.giftName || '未知礼物';
+      const num = data.num || 1;
+      const uname = data.uname || '未知';
+      const uid = data.uid || 0;
+      const face = data.face || 'https://static.hdslb.com/images/member/noface.gif';
+      const price = data.price || 0;           // 单个礼物的金瓜子价格
+      const totalCoin = data.total_coin || 0;   // 总消费金瓜子
+      const coinType = data.coin_type || 'gold';
+      const giftIcon = data.giftIcon || '';
+      const comboNum = data.combo_num || 1;
+      const comboStay = data.combo_stay || 1;
+      const batchComboId = data.batch_combo_id || '';
+      const medalLevel = data.medal_info?.medal_level || 0;
+      const medalName = data.medal_info?.medal_name || '';
+      const rcost = data.rcost || 0;            // 真实消费（金瓜子）
+      const discountPrice = data.discount_price || 0;
+
+      // 计算人民币价值（B站 1元 = 1000金瓜子）
+      const rmbPrice = totalCoin / 1000;
+
+      console.log(`[实例:${this.instanceId} 礼物] UID: ${uid} | 名字: ${uname} | 礼物: ${giftName}(${giftId}) x${num} | 金瓜子: ${totalCoin} | 头像: ${face}`);
+
+      // 通过回调将数据发回给调用方
+      if (this.onGift) {
+        this.onGift({
+          // 基础字段
+          giftId,
+          giftName,
+          num,
+          uname,
+          uid,
+          face,
+          // 价格字段
+          price,           // 单个价格
+          totalCoin,       // 总消费
+          rcost,           // 真实消费
+          coinType,
+          rmbPrice,        // 人民币估算
+          discountPrice,
+          // 连击字段
+          comboNum,
+          comboStay,
+          batchComboId,
+          // 粉丝牌
+          medalLevel,
+          medalName,
+          // 图标
+          giftIcon,
+          // 时间戳
+          timestamp: Date.now(),
+        });
+      }
+    } catch (parseErr) {
+      console.error(`[实例:${this.instanceId} 礼物解析错误]:`, parseErr);
     }
   }
 

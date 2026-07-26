@@ -15,7 +15,7 @@
       </div>
       <!-- 标题 -->
       <div class="title">
-        <label>弹幕信息</label>
+        <label>{{ props.title || t('danmu.title') }}</label>
   
       </div>
       <div class="type-icons">
@@ -57,8 +57,10 @@ import { CastMethod, type DyMessage } from '@/core/dycast';
 import { throttle } from '@/utils/loashUtil';
 import { useDanmuStore } from '@/components/composables/DanmuData'
 import type { LivePlatform } from '@/core/livePlatforms'
+import { useI18n } from 'vue-i18n'
 
 
+const { t } = useI18n()
 const { allCasts, mainCasts, platformMainCasts } = useDanmuStore()
 
 // 只显示聊天/礼物/emoji

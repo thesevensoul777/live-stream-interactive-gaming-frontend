@@ -296,9 +296,60 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
           }
         },
         onGift: (gift) => {
+          // 1. 回传给渲染进程（前端展示）
           if (win && !win.isDestroyed()) {
             win.webContents.send(`bili:gift-${userId}`, gift);
           }
+
+          // 2. 广播到 overlay 窗口（特效展示，与抖音礼物逻辑一致）
+          if (windowManager.overlayWin && !windowManager.overlayWin.isDestroyed()) {
+            windowManager.overlayWin.webContents.send('broadcast-gift', {
+              realId: `bili_${gift.uid}`,
+              user: gift.uname,
+              time: Date.now(),
+              command: '', // 由前端根据 giftId 映射
+              giftId: gift.giftId,
+              count: gift.num,
+            });
+          }
+
+          // 3. 送入 BufferService 批量上报后端（与抖音礼物逻辑一致）
+          //    构建与 GiftRecordRequest 兼容的结构
+          bufferService.addGift({
+            id: gift.giftId,
+            name: gift.giftName,
+            price: gift.price,           // 金瓜子价格
+            type: 0,
+            desc: gift.giftName,
+            icon: gift.giftIcon,
+            count: gift.num,
+            repeatEnd: gift.comboStay === 1 ? 1 : 0,
+            senderId: `bili_${gift.uid}`,
+            senderName: gift.uname,
+            gameTypeId: userId,           // 使用 userId 作为游戏类型标识
+            // Bilibili 特有字段保留
+            platform: 'bilibili',
+            totalCoin: gift.totalCoin,
+            rmbPrice: gift.rmbPrice,
+            medalLevel: gift.medalLevel,
+            medalName: gift.medalName,
+            timestamp: gift.timestamp,
+          });
+
+          // 4. 同时写入魔兽争霸礼物文件（与抖音礼物逻辑一致）
+          //    构建与 saveGift 兼容的格式
+          const giftPayload = {
+            realId: `bili_${gift.uid}`,
+            user: gift.uname,
+            command: '', // 由前端根据 giftId 映射
+            count: gift.num,
+          };
+          // 异步写入，不阻塞
+          import('./war3.js').then(({ saveGift }) => {
+            saveGift(giftPayload).catch(err => {
+              console.error('[bili gift saveGift failed]', err);
+            });
+          });
         },
         onStatus: (status) => {
           if (win && !win.isDestroyed()) {

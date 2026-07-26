@@ -9,9 +9,9 @@
         :class="{ active: activePlatform === platform }"
         @click="activePlatform = platform"
       >
-        <span>{{ LIVE_PLATFORM_LABEL[platform] }}</span>
+        <span>{{ t(`platforms.${platform}`) }}</span>
         <span :class="platformPanels[platform].status === 1 ? 'connected' : 'disconnected'">
-          {{ platformPanels[platform].status === 1 ? '已连接' : '未连接' }}
+          {{ platformPanels[platform].status === 1 ? t('controlPanel.connected') : t('controlPanel.disconnected') }}
         </span>
       </button>
     </div>
@@ -19,7 +19,7 @@
     <section class="platform-surface">
       <div class="platform-topbar">
         <div class="field room-field">
-          <span class="label">直播间</span>
+          <span class="label">{{ t('controlPanel.room') }}</span>
           <input
             v-model="platformPanels[activePlatform].room"
             class="field-input"
@@ -33,14 +33,14 @@
           :class="{ running: platformPanels[activePlatform].status === 1 }"
           @click="togglePlatformListen(activePlatform)"
         >
-          {{ platformPanels[activePlatform].status === 1 ? '停止监听' : '启动监听' }}
+          {{ platformPanels[activePlatform].status === 1 ? t('controlPanel.stopListen') : t('controlPanel.startListen') }}
         </button>
       </div>
 
       <div class="platform-summary">
-        <span>{{ LIVE_PLATFORM_LABEL[activePlatform] }}</span>
-        <span>{{ platformPanels[activePlatform].roomInfo?.anchor || '未获取主播' }}</span>
-        <span>{{ platformPanels[activePlatform].roomInfo?.title || '未获取标题' }}</span>
+        <span>{{ t(`platforms.${activePlatform}`) }}</span>
+        <span>{{ platformPanels[activePlatform].roomInfo?.anchor || t('controlPanel.anchorUnknown') }}</span>
+        <span>{{ platformPanels[activePlatform].roomInfo?.title || t('controlPanel.titleUnknown') }}</span>
         <span>{{ platformPanels[activePlatform].roomInfo?.status || 'unknown' }}</span>
       </div>
 
@@ -50,7 +50,7 @@
 
       <div class="platform-grid">
         <section class="platform-block">
-          <h3>弹幕信息</h3>
+          <h3>{{ t('controlPanel.danmuInfo') }}</h3>
           <DanmuList
             embedded
             pos="center"
@@ -60,12 +60,12 @@
         </section>
 
         <section class="platform-block">
-          <h3>礼物操作</h3>
+          <h3>{{ t('controlPanel.giftActions') }}</h3>
           <div class="block-fields">
             <label class="field">
-              <span class="label">选择玩家</span>
+              <span class="label">{{ t('controlPanel.selectPlayer') }}</span>
               <select v-model="platformPanels[activePlatform].selectedPlayer">
-                <option value="" disabled>请选择玩家</option>
+                <option value="" disabled>{{ t('controlPanel.selectPlayerPlaceholder') }}</option>
                 <option
                   v-for="playerOption in platformPanels[activePlatform].players"
                   :key="playerOption.realId"
@@ -77,7 +77,7 @@
             </label>
 
             <label class="field count-field">
-              <span class="label">数量</span>
+              <span class="label">{{ t('controlPanel.quantity') }}</span>
               <input
                 v-model.number="platformPanels[activePlatform].giftCount"
                 type="number"
@@ -87,21 +87,21 @@
             </label>
 
             <label class="field gift-field">
-              <span class="label">选择礼物</span>
+              <span class="label">{{ t('controlPanel.selectGift') }}</span>
               <select v-model="platformPanels[activePlatform].giftId">
                 <option
                   v-for="(label, giftId) in LW_GIFT_NAME_MAP"
                   :key="giftId"
                   :value="giftId"
                 >
-                  {{ label }}
+                  {{ t(`gifts.names.${giftId}`, label) }}
                 </option>
               </select>
             </label>
           </div>
 
           <div class="gift-actions">
-            <button type="button" @click="sendPlatformGift(activePlatform)">补送礼物</button>
+            <button type="button" @click="sendPlatformGift(activePlatform)">{{ t('controlPanel.manualGift') }}</button>
           </div>
         </section>
       </div>
@@ -110,8 +110,8 @@
     <section class="global-surface">
       <div class="global-row">
         <label class="field">
-          <span class="label">秘钥</span>
-          <input v-model="globalSecret" class="field-input" placeholder="通用秘钥" />
+          <span class="label">{{ t('controlPanel.secret') }}</span>
+          <input v-model="globalSecret" class="field-input" :placeholder="t('controlPanel.commonSecret')" />
         </label>
 
         <div class="actions">
@@ -119,11 +119,11 @@
   {{ buttonText }}
 </button>
           <button type="button" class="btn-launch" :disabled="!path" @click="launchGame">
-            启动游戏
+            {{ t('controlPanel.launchGame') }}
           </button>
-          <button type="button" @click="resetGameData">重置</button>
-          <button type="button" @click="addRobot">添加人机</button>
-          <button type="button" @click="openOverlay">开启特效</button>
+          <button type="button" @click="resetGameData">{{ t('controlPanel.reset') }}</button>
+          <button type="button" @click="addRobot">{{ t('controlPanel.addRobot') }}</button>
+          <button type="button" @click="openOverlay">{{ t('controlPanel.openOverlay') }}</button>
         </div>
       </div>
     </section>
@@ -154,11 +154,13 @@ import { LW_GIFT_NAME_MAP } from '@/constants'
 import { useCrossWindowSync } from '@/components//composables/useCrossWindowSync'
 import { SYNC_CHANNELS } from '@/constants/syncChannels'
 import {
-  LIVE_PLATFORM_LABEL,
   fetchLiveRoomInfo,
   type LivePlatform,
   type LiveRoomInfo as PlatformRoomInfo,
 } from '@/core/livePlatforms'
+import { useI18n } from 'vue-i18n'
+
+const { t, tm } = useI18n()
 
 type PlatformPlayer = {
   realId: string
@@ -185,12 +187,12 @@ type PlatformPanelState = {
 
 const PLATFORM_ORDER: LivePlatform[] = ['douyin', 'douyu', 'bilibili', 'tiktok']
 
-const platformPlaceholders: Record<LivePlatform, string> = {
-  douyin: '抖音号或直播间号',
-  douyu: '斗鱼房间号或链接',
-  bilibili: 'Bilibili 房间号或链接',
-  tiktok: '@username 或直播间链接',
-}
+const platformPlaceholders = computed<Record<LivePlatform, string>>(() => ({
+  douyin: t('controlPanel.douyinPlaceholder'),
+  douyu: t('controlPanel.douyuPlaceholder'),
+  bilibili: t('controlPanel.bilibiliPlaceholder'),
+  tiktok: t('controlPanel.tiktokPlaceholder'),
+}))
 
 function createPlatformPanel(room = ''): PlatformPanelState {
   return {
@@ -222,7 +224,8 @@ const { currentPlay, clearDanmu, clearCurrentPlay, appendPlatformMainCasts, clea
 const globalSecret = ref('1')
 const path = ref('')
 const confirmed = ref(false)
-const buttonText = ref('选择游戏文件夹')
+const folderButtonKey = ref('controlPanel.chooseGameFolder')
+const buttonText = computed(() => t(folderButtonKey.value))
 
 let stopListening: (() => void) | undefined
 let castWs: DyCast | undefined
@@ -273,7 +276,7 @@ function stopPlatformRoomInfoTimer(platform: LivePlatform) {
 async function fetchPlatformRoomInfo(platform: Exclude<LivePlatform, 'douyin'>) {
   const panel = platformPanels.value[platform]
   if (!panel.room) {
-    panel.error = '请填写直播间'
+    panel.error = t('controlPanel.roomRequired')
     return
   }
 
@@ -284,7 +287,7 @@ async function fetchPlatformRoomInfo(platform: Exclude<LivePlatform, 'douyin'>) 
     panel.status = info.status === 'live' ? 1 : 0
   } catch (err) {
     panel.status = 0
-    panel.error = err instanceof Error ? err.message : '获取直播间信息失败'
+    panel.error = err instanceof Error ? err.message : t('controlPanel.roomInfoFailed')
   }
 }
 
@@ -365,7 +368,7 @@ async function togglePlatformListen(platform: LivePlatform) {
 async function startBilibiliListen() {
   const panel = platformPanels.value.bilibili
   if (!panel.room) {
-    panel.error = '请填写 Bilibili 直播间'
+    panel.error = t('controlPanel.bilibiliRoomRequired')
     return
   }
 
@@ -381,7 +384,7 @@ async function startBilibiliListen() {
 
     if (info.status !== 'live') {
       panel.status = 0
-      panel.error = '直播未开播'
+      panel.error = t('controlPanel.liveNotStarted')
       return
     }
 
@@ -389,7 +392,7 @@ async function startBilibiliListen() {
     const currentUser = authStore.user
     if (!currentUser || !currentUser.id) {
       panel.status = 0
-      panel.error = '请先登录'
+      panel.error = t('controlPanel.loginRequired')
       return
     }
 
@@ -400,7 +403,7 @@ async function startBilibiliListen() {
     const result = await (window as any).electronAPI.biliStartMonitor({ userId, targetRoomId })
     if (!result.ok) {
       panel.status = 0
-      panel.error = result.error || 'Bilibili 监控启动失败'
+      panel.error = result.error || t('controlPanel.bilibiliStartFailed')
       return
     }
 
@@ -415,7 +418,7 @@ async function startBilibiliListen() {
         user: {
           realId: danmu.uid ? `bili_${danmu.uid}` : undefined,
           id: String(danmu.uid || ''),
-          name: danmu.username || '匿名用户',
+          name: danmu.username || t('controlPanel.anonymousUser'),
           avatar: danmu.faceUrl || '',
         },
         content: danmu.content || '',
@@ -433,13 +436,13 @@ async function startBilibiliListen() {
         user: {
           realId: gift.uid ? `bili_${gift.uid}` : undefined,
           id: String(gift.uid || ''),
-          name: gift.username || '匿名用户',
-          avatar: gift.faceUrl || '',
+          name: gift.uname || t('controlPanel.anonymousUser'),
+          avatar: gift.face || '',
         },
         gift: {
           id: gift.giftId || 'unknown',
-          name: gift.giftName || '礼物',
-          count: gift.count || 1,
+          name: gift.giftName || t('controlPanel.giftFallback'),
+          count: gift.num || 1,
           repeatEnd: 1,
           icon: gift.giftIcon || '',
           price: gift.price || 0,
@@ -457,7 +460,7 @@ async function startBilibiliListen() {
         panel.error = ''
       } else if (status.type === 'disconnected' || status.type === 'max_reconnect_exceeded') {
         panel.status = 0
-        panel.error = status.type === 'max_reconnect_exceeded' ? 'Bilibili 重连失败' : 'Bilibili 已断开'
+        panel.error = status.type === 'max_reconnect_exceeded' ? t('controlPanel.bilibiliReconnectFailed') : t('controlPanel.bilibiliDisconnected')
       }
     })
     biliCleanupFns.push(cleanupStatus)
@@ -465,7 +468,7 @@ async function startBilibiliListen() {
     // 监听错误
     const cleanupError = (window as any).electronAPI.onBiliError(userId, (error: any) => {
       panel.status = 0
-      panel.error = error.message || 'Bilibili 连接错误'
+      panel.error = error.message || t('controlPanel.bilibiliConnectionError')
     })
     biliCleanupFns.push(cleanupError)
 
@@ -473,18 +476,18 @@ async function startBilibiliListen() {
     panel.error = ''
   } catch (err) {
     panel.status = 0
-    panel.error = err instanceof Error ? err.message : 'Bilibili 连接失败'
+    panel.error = err instanceof Error ? err.message : t('controlPanel.bilibiliConnectionFailed')
   }
 }
 
 async function startDouyinListen() {
   const panel = platformPanels.value.douyin
   if (!panel.room) {
-    panel.error = '请填写抖音直播间'
+    panel.error = t('controlPanel.douyinRoomRequired')
     return
   }
   if (!globalSecret.value) {
-    panel.error = '请填写通用秘钥'
+    panel.error = t('controlPanel.secretRequired')
     return
   }
 
@@ -515,7 +518,7 @@ function connectLive(roomId: string) {
 
     cast.on('error', (err: Error) => {
       panel.status = 0
-      panel.error = err.message || '抖音连接失败'
+      panel.error = err.message || t('controlPanel.douyinConnectionFailed')
     })
 
     cast.on('close', (_code: DyCastCloseCode, _reason: string) => {
@@ -530,7 +533,7 @@ function connectLive(roomId: string) {
     castWs = cast
   } catch (err) {
     platformPanels.value.douyin.status = 0
-    platformPanels.value.douyin.error = err instanceof Error ? err.message : '抖音连接失败'
+    platformPanels.value.douyin.error = err instanceof Error ? err.message : t('controlPanel.douyinConnectionFailed')
     castWs = undefined
   }
 }
@@ -608,7 +611,7 @@ function handleBilibiliMessages(msgs: DyMessage[]) {
 function sendPlatformGift(platform: LivePlatform) {
   const panel = platformPanels.value[platform]
   if (!panel.selectedPlayer) {
-    panel.error = '请选择玩家'
+    panel.error = t('controlPanel.playerRequired')
     return
   }
 
@@ -623,7 +626,7 @@ function sendPlatformGift(platform: LivePlatform) {
 
   panel.error = ''
   ManualGiveGift(payload)
-  pushPlatformMessage(platform, payload.user, `手动补送礼物 ${panel.giftId} x${panel.giftCount}`)
+  pushPlatformMessage(platform, payload.user, t('controlPanel.manualGiftMessage', { giftId: panel.giftId, count: panel.giftCount }))
 }
 
 async function chooseFolder() {
@@ -631,19 +634,19 @@ async function chooseFolder() {
   if (result) {
     path.value = result
     confirmed.value = true
-    buttonText.value = '已确认游戏文件夹'
+    folderButtonKey.value = 'controlPanel.gameFolderConfirmed'
   } else {
     confirmed.value = false
-    buttonText.value = '选择游戏文件夹'
+    folderButtonKey.value = 'controlPanel.chooseGameFolder'
   }
 }
 
 async function launchGame() {
   if (!path.value) {
-    alert('请先选择游戏文件夹')
+    alert(t('controlPanel.gameFolderRequired'))
     return
   }else{
-     buttonText.value = '选择游戏文件夹'
+     folderButtonKey.value = 'controlPanel.chooseGameFolder'
   }
 
   await (window as any).gameAPI.launchWar3(path.value)
@@ -661,13 +664,7 @@ function resetGameData() {
 }
 
 function addRobot() {
-  const robotNames = [
-    '真实服了这老六',
-    '今天也没睡饱',
-    '优雅永不过时',
-    'Joker',
-    '隔壁老王',
-  ]
+  const robotNames = tm('controlPanel.robotNames') as unknown as string[]
 
   const robotId = `robot_${Math.floor(Math.random() * 100000)}`
   const randomName = robotNames[Math.floor(Math.random() * robotNames.length)]
@@ -761,6 +758,9 @@ onUnmounted(() => {
   border-radius: 6px;
   padding: 14px;
   background: linear-gradient(180deg, #fbfcfe 0%, #f3f6fa 100%);
+  color: #314055;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .platform-tabs {
@@ -781,6 +781,7 @@ onUnmounted(() => {
   background: #ffffff;
   color: #314055;
   cursor: pointer;
+  font-weight: 400;
 }
 
 .platform-tab.active {
@@ -834,6 +835,7 @@ onUnmounted(() => {
 .platform-block h3 {
   margin: 0 0 10px;
   font-size: 14px;
+  font-weight: 600;
   color: #2f3f57;
   flex-shrink: 0;
 }
@@ -857,6 +859,9 @@ input[type='number'] {
   border: 1px solid #ccd4e0;
   border-radius: 4px;
   background: #fff;
+  color: #314055;
+  font: inherit;
+  font-weight: 400;
 }
 
 .label {
@@ -872,7 +877,10 @@ input[type='number'] {
   border: 1px solid #c4cfde;
   border-radius: 4px;
   background: #fff;
+  color: #314055;
   cursor: pointer;
+  font: inherit;
+  font-weight: 400;
 }
 
 .listen-btn.running {

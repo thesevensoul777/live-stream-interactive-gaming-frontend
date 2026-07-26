@@ -17,7 +17,7 @@
         <span v-if="item.node === 'text'" class="text">{{ item.text }}</span>
         <span v-if="item.node === 'user'" class="touser">{{ item.text }}</span>
         <img v-if="item.node === 'icon'" class="icon" :title="item.text" :src="item.url" :alt="item.text" />
-        <img v-if="item.node === 'emoji'" class="emoji" alt="会员表情" :src="item.url" />
+        <img v-if="item.node === 'emoji'" class="emoji" :alt="t('danmu.memberEmoji')" :src="item.url" />
       </template>
     </p>
   </div>
@@ -27,6 +27,9 @@
 import { CastMethod, CastRtfContentType, type CastGift, type CastRtfContent, type CastUser } from '@/core/dycast';
 import { emojis } from '@/core/emoji';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface CastContentDOM {
   node: 'text' | 'icon' | 'emoji' | 'user';
@@ -113,7 +116,7 @@ const doms = computed(() => {
         list = [
           {
             node: 'text',
-            text: '送出了'
+            text: t('danmu.sentGift')
           },
           {
             node: 'icon',
@@ -129,7 +132,7 @@ const doms = computed(() => {
         list = [
           {
             node: 'text',
-            text: '送出了礼物'
+            text: t('danmu.sentGiftFallback')
           }
         ];
       }
@@ -138,7 +141,7 @@ const doms = computed(() => {
       list = [
         {
           node: 'emoji',
-          text: '会员表情',
+          text: t('danmu.memberEmoji'),
           url: props.content
         }
       ];

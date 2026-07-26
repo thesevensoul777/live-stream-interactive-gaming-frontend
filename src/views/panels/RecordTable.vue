@@ -4,12 +4,12 @@
   <table class="table">
     <thead>
       <tr>
-        <th>礼物id</th>
-        <th>赠送人</th>
-        <th>礼物</th>
-        <th>数量</th>
-        <th>音浪</th>
-        <th>时间</th>
+        <th>{{ t('records.giftId') }}</th>
+        <th>{{ t('records.sender') }}</th>
+        <th>{{ t('records.gift') }}</th>
+        <th>{{ t('records.count') }}</th>
+        <th>{{ t('records.soundWave') }}</th>
+        <th>{{ t('records.time') }}</th>
       </tr>
     </thead>
 
@@ -37,7 +37,9 @@ import { ref } from 'vue';
 import { pushGiftApi } from '@/api/gift'
 import type { GiftRecordRequest } from '@/api/dto/giftRecord'
 import type { PlayerDelta } from '@/api/dto/Player'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const { allCasts, mainCasts } = useDanmuStore()
 
 const giftBuffer: GiftRecordRequest[] = []

@@ -1,28 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface AttrItem {
   key: string
   value: string
 }
 
-const attrs = ref<AttrItem[]>([
-  { key: '房间ID', value: '91375314576' },
-  { key: '主播名称', value: '某某主播' },
-  { key: '游戏类型', value: '魔兽争霸' },
-  { key: '监听状态', value: '运行中' },
+const { t } = useI18n()
+
+const attrs = computed<AttrItem[]>(() => [
+  { key: t('uploadAttrs.roomId'), value: '91375314576' },
+  { key: t('uploadAttrs.anchorName'), value: t('uploadAttrs.sampleAnchor') },
+  { key: t('uploadAttrs.gameType'), value: t('uploadAttrs.warcraft') },
+  { key: t('uploadAttrs.monitorStatus'), value: t('uploadAttrs.running') },
 ])
 </script>
 
 <template>
   <div class="attr-wrapper">
-    <div class="title">上传属性</div>
+    <div class="title">{{ t('uploadAttrs.title') }}</div>
 
     <table>
       <thead>
         <tr>
-          <th>属性</th>
-          <th>值</th>
+          <th>{{ t('uploadAttrs.attribute') }}</th>
+          <th>{{ t('uploadAttrs.value') }}</th>
         </tr>
       </thead>
       <tbody>

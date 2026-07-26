@@ -29,7 +29,7 @@
       </div>
 
       <div v-if="topThree.length === 0" class="loading-placeholder">
-        正在获取世界排名...
+        {{ t('overlay.loadingRanking') }}
       </div>
     </div>
 
@@ -40,14 +40,14 @@
     <transition name="zoom">
       <div v-if="showRankList" class="full-rank-overlay">
         <div class="rank-panel">
-          <div class="panel-header">🏆 世界排行榜</div>
+          <div class="panel-header">{{ t('overlay.worldLeaderboard') }}</div>
           <div class="list-body">
             <div v-for="(item, i) in fullRanks" :key="i" class="list-item">
               <span class="num">{{ i + 1 }}</span>
               <img :src="item.avatarUrl || item.avatar || defaultAvatar" />
               <span class="name">{{ item.douyinName || item.nickname }}</span>
               <span class="kills">⚔️ {{ formatNumber(item.kills) || 0 }}</span>
-  <span class="tier">🛡️ {{ item.tier || '青铜5' }}</span>
+  <span class="tier">🛡️ {{ item.tier || t('overlay.bronzeTier') }}</span>
               <span class="points">{{ item.rankPoints || item.totalScore }}</span>
             </div>
           </div>
@@ -74,8 +74,10 @@ import {
 } from "@/constants";
 import { SYNC_CHANNELS } from '@/constants/syncChannels';
 import { useCrossWindowSync } from '@/components/composables/useCrossWindowSync';
+import { useI18n } from 'vue-i18n'
 
 // --- 变量声明置顶 ---
+const { t } = useI18n()
 const { currentPlay } = useDanmuStore()
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 const gameTypeId = '261CE843-5F44-418A-8D10-E49F5DEB191D' // 💡 替换为你的真实ID
@@ -142,8 +144,8 @@ const processRankEntryNotification = (user: any, rank: number) => {
     type: 'RANK', // 你可以给 CSS 增加一个 .rank 样式，做成金色气泡
     user: user.name,
     avatar: user.avatar,
-    label: '驾临直播间',
-    content: `世界排名第 ${rank} 位`,
+    label: t('overlay.rankEntryLabel'),
+    content: t('overlay.worldRank', { rank }),
     count: rank // 或者显示奖杯图标
   };
 
@@ -162,7 +164,7 @@ const fetchLeaderboard = async () => {
       topThree.value = (res.data.data || []).slice(0, 3)
     }
   } catch (err) {
-    console.warn("排行榜请求失败，保持当前状态");
+    console.warn(t('overlay.leaderboardRequestFailed'));
   }
 }
 
@@ -198,14 +200,14 @@ const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
 
   if (type === 'LIKE') {
     // 点赞固定播报
-    label = '点赞了';
-    displayContent = '获得 10 经验和 5 金币';
+    label = t('overlay.liked');
+    displayContent = t('overlay.likeReward');
     displayCount = data.likeCount || 1;
   } else if (type === 'GIFT') {
     // 礼物根据 ID 匹配功能描述
-    label = '获得了';
+    label = t('overlay.gained');
     const giftCommand = data.command; 
-    const effectDesc = LW_GIFT_DESC[giftCommand] || '未知力量';
+    const effectDesc = t(`gifts.desc.${giftCommand}`, LW_GIFT_DESC[giftCommand] || t('overlay.unknownPower'));
     displayContent = `${effectDesc}`; 
     displayCount = data.count || 1;
   }
