@@ -1,155 +1,173 @@
 // electron/services/BiliAuthManager.js
-import { BrowserWindow, session } from 'electron';
-
-/**
- * BiliAuthManager - 管理主播的 B 站登录态
- * 
- * 核心逻辑：
- * 1. 每个主播（userId）拥有独立的持久化沙盒 session（persist:bili_sandbox_{userId}）
- * 2. 启动时自动检测沙盒内是否已有有效 Cookie（SESSDATA + DedeUserID）
- * 3. 如果未登录，弹出 B 站官方 H5 登录窗口让主播扫码
- * 4. 登录成功后 Cookie 自动固化在沙盒中，后续请求自动携带凭证
- */
+import { app, BrowserWindow, session } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const LOGIN_WINDOW_WIDTH = 480;
 const LOGIN_WINDOW_HEIGHT = 650;
 const COOKIE_CHECK_INTERVAL_MS = 1500;
 const BILI_DOMAIN = '.bilibili.com';
 
-/**
- * 获取指定主播的隔离沙盒 session
- * @param {string} userId 主播唯一标识
- * @returns {Electron.Session}
- */
 function getSandboxSession(userId) {
-  const partitionName = `persist:bili_sandbox_${userId}`;
+  const partitionName = "persist:bili_sandbox_" + userId;
   return session.fromPartition(partitionName);
 }
 
-/**
- * 从沙盒中读取 B 站登录凭证
- * @param {Electron.Session} userSession
- * @returns {Promise<{SESSDATA: string|null, DEDEUSERID: string|null}>}
- */
+function getCredsFilePath(userId) {
+  return path.join(app.getPath("userData"), "bili_creds_" + userId + ".json");
+}
+
 async function getCredentialsFromSession(userSession) {
   const cookies = await userSession.cookies.get({ domain: BILI_DOMAIN });
-  const sessdata = cookies.find(c => c.name === 'SESSDATA');
-  const dedeUserId = cookies.find(c => c.name === 'DedeUserID');
+  const sessdata = cookies.find(c => c.name === "SESSDATA");
+  const dedeUserId = cookies.find(c => c.name === "DedeUserID");
   return {
     SESSDATA: sessdata?.value || null,
     DEDEUSERID: dedeUserId?.value || null,
   };
 }
 
-/**
- * 确保主播已登录，如果未登录则弹出扫码窗口
- * 
- * @param {string} userId 主播在软件里的唯一ID
- * @returns {Promise<{SESSDATA: string, DEDEUSERID: string}>}
- */
+function readSavedCredentials(userId) {
+  try {
+    const filePath = getCredsFilePath(userId);
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveCredentialsToFile(userId, credentials) {
+  try {
+    const filePath = getCredsFilePath(userId);
+    fs.writeFileSync(filePath, JSON.stringify(credentials, null, 2), "utf-8");
+    console.log("[BiliAuth-" + userId + "] Credentials saved to file for persistence.");
+  } catch (err) {
+    console.error("[BiliAuth-" + userId + "] Failed to save credentials to file:", err.message);
+  }
+}
+
+function deleteCredentialsFile(userId) {
+  try {
+    const filePath = getCredsFilePath(userId);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {}
+}
+
+async function injectCredentialsToSession(userSession, credentials) {
+  const items = { SESSDATA: credentials.SESSDATA, DedeUserID: credentials.DEDEUSERID };
+  for (const [name, value] of Object.entries(items)) {
+    try {
+      await userSession.cookies.set({
+        url: "https://www.bilibili.com",
+        name,
+        value,
+        domain: ".bilibili.com",
+        secure: true,
+        httpOnly: true,
+      });
+    } catch (err) {
+      console.error("[BiliAuth] Failed to inject cookie " + name + ":", err.message);
+    }
+  }
+}
+
 export async function ensureUserAuthenticated(userId) {
   const userSession = getSandboxSession(userId);
 
-  // 1. 检查是否已有有效凭证
-  const credentials = await getCredentialsFromSession(userSession);
+  let credentials = await getCredentialsFromSession(userSession);
   if (credentials.SESSDATA && credentials.DEDEUSERID) {
-    console.log(`[BiliAuth-${userId}] ✅ 检测到本地已存在有效登录凭证 (UID: ${credentials.DEDEUSERID})，跳过扫码。`);
+    console.log("[BiliAuth-" + userId + "] Session cookies found (UID: " + credentials.DEDEUSERID + "), skipping login.");
     return credentials;
   }
 
-  // 2. 未登录 → 弹出 B 站官方 H5 登录页让主播扫码
-  console.log(`[BiliAuth-${userId}] 🔑 未检测到登录凭证，正在弹出 B 站官方登录窗口...`);
+  const saved = readSavedCredentials(userId);
+  if (saved && saved.SESSDATA && saved.DEDEUSERID) {
+    console.log("[BiliAuth-" + userId + "] Restoring credentials from file (UID: " + saved.DEDEUSERID + ").");
+    await injectCredentialsToSession(userSession, saved);
+    credentials = await getCredentialsFromSession(userSession);
+    if (credentials.SESSDATA && credentials.DEDEUSERID) {
+      return credentials;
+    }
+  }
+
+  console.log("[BiliAuth-" + userId + "] No valid credentials found, opening login window...");
 
   return new Promise((resolve, reject) => {
     const loginWin = new BrowserWindow({
       width: LOGIN_WINDOW_WIDTH,
       height: LOGIN_WINDOW_HEIGHT,
-      title: '请登录您的 B 站账号以激活高保真弹幕通道',
+      title: "Please login to your Bilibili account",
       autoHideMenuBar: true,
       resizable: false,
       alwaysOnTop: true,
       webPreferences: {
-        partition: `persist:bili_sandbox_${userId}`,
+        partition: "persist:bili_sandbox_" + userId,
         contextIsolation: true,
         nodeIntegration: false,
       },
     });
 
     loginWin.webContents.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
-    // 先加载 B 站首页，再跳转到登录页，避免 H5 登录页被拦截
-    loginWin.loadURL('https://www.bilibili.com/');
-
-    // 监听页面加载完成后跳转到登录页
-    loginWin.webContents.on('did-finish-load', () => {
+    loginWin.loadURL("https://www.bilibili.com/");
+    loginWin.webContents.on("did-finish-load", () => {
       const currentUrl = loginWin.webContents.getURL();
-      if (currentUrl === 'https://www.bilibili.com/' || currentUrl === 'https://www.bilibili.com') {
-        loginWin.loadURL('https://passport.bilibili.com/login');
+      if (currentUrl === "https://www.bilibili.com/" || currentUrl === "https://www.bilibili.com") {
+        loginWin.loadURL("https://passport.bilibili.com/login");
       }
     });
 
-    // 监听加载失败（如页面不存在）
-    loginWin.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-      console.error(`[BiliAuth-${userId}] ❌ 页面加载失败 [${errorCode}] ${errorDescription} — URL: ${validatedURL}`);
+    loginWin.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+      console.error("[BiliAuth-" + userId + "] Page load failed [" + errorCode + "] " + errorDescription + " " + validatedURL);
     });
 
     let resolved = false;
-
-    // 轮询检测 Cookie 是否写入（用户扫码登录后 B 站会设置 Cookie）
     const checker = setInterval(async () => {
       if (loginWin.isDestroyed()) {
         clearInterval(checker);
         return;
       }
-
       try {
         const currentCredentials = await getCredentialsFromSession(userSession);
         if (currentCredentials.SESSDATA && currentCredentials.DEDEUSERID) {
           clearInterval(checker);
           resolved = true;
-          console.log(`[BiliAuth-${userId}] 🎉 主播扫码登录成功！UID: ${currentCredentials.DEDEUSERID}`);
+          console.log("[BiliAuth-" + userId + "] Login successful! UID: " + currentCredentials.DEDEUSERID);
 
-          if (!loginWin.isDestroyed()) {
-            loginWin.destroy();
-          }
+          saveCredentialsToFile(userId, currentCredentials);
+
+          if (!loginWin.isDestroyed()) loginWin.destroy();
           resolve(currentCredentials);
         }
       } catch (err) {
-        console.error(`[BiliAuth-${userId}] 嗅探 Cookie 失败:`, err.message);
+        console.error("[BiliAuth-" + userId + "] Cookie check failed:", err.message);
       }
     }, COOKIE_CHECK_INTERVAL_MS);
 
-    loginWin.on('closed', () => {
+    loginWin.on("closed", () => {
       clearInterval(checker);
-      // 如果已经 resolve 过了（登录成功后被 destroy），不再 reject
-      if (!resolved) {
-        reject(new Error('主播取消了登录。'));
-      }
+      if (!resolved) reject(new Error("Login cancelled."));
     });
   });
 }
 
-/**
- * 清除指定主播的登录态（登出）
- * @param {string} userId
- */
 export async function clearUserAuth(userId) {
   const userSession = getSandboxSession(userId);
   await userSession.clearStorageData({
-    storages: ['cookies', 'localstorage', 'cache'],
+    storages: ["cookies", "localstorage", "cache"],
   });
-  console.log(`[BiliAuth-${userId}] 🧹 已清除该主播的登录凭证。`);
+  deleteCredentialsFile(userId);
+  console.log("[BiliAuth-" + userId + "] Auth cleared.");
 }
 
-/**
- * 检查指定主播是否已登录
- * @param {string} userId
- * @returns {Promise<boolean>}
- */
 export async function isUserAuthenticated(userId) {
   const userSession = getSandboxSession(userId);
   const credentials = await getCredentialsFromSession(userSession);
-  return !!(credentials.SESSDATA && credentials.DEDEUSERID);
+  if (credentials.SESSDATA && credentials.DEDEUSERID) return true;
+  const saved = readSavedCredentials(userId);
+  return !!(saved && saved.SESSDATA && saved.DEDEUSERID);
 }

@@ -14,6 +14,7 @@ export type LiveRoomInfo = {
 
 type FetchLive = (url: string, headers?: Record<string, string>) => Promise<string>
 
+const TIKTOK_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
@@ -96,8 +97,10 @@ async function fetchBilibiliRoomInfo(input: string, fetchLive: FetchLive): Promi
 async function fetchTikTokRoomInfo(input: string, fetchLive: FetchLive): Promise<LiveRoomInfo> {
   const liveUrl = input.startsWith('http') ? input : `https://www.tiktok.com/@${input.replace(/^@/, '')}/live`
   const html = await fetchLive(liveUrl, {
-    'User-Agent': UA,
+    'User-Agent': TIKTOK_UA,
     Referer: 'https://www.tiktok.com/',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
   })
 
   const universalJson = extractJsonScript(html, '__UNIVERSAL_DATA_FOR_REHYDRATION__')

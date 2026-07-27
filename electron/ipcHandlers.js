@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, net } from 'electron';
+import { BrowserWindow, dialog, ipcMain, net, session } from 'electron';
 import zlib from 'zlib';
 import {
   getWarcraftPath,
@@ -11,25 +11,26 @@ import {
 import { ensureUserAuthenticated, clearUserAuth, isUserAuthenticated } from './services/BiliAuthManager.js';
 import { BilibiliLiveService } from './services/BilibiliLiveService.js';
 
-function netGetText(url, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const request = net.request({
-      method: 'GET',
-      url,
-      headers,
-    });
-
-    request.on('response', (response) => {
-      let data = '';
-      response.on('data', (chunk) => {
-        data += chunk.toString();
-      });
-      response.on('end', () => resolve(data));
-    });
-
-    request.on('error', reject);
-    request.end();
+async function netGetText(url, headers = {}) {
+  const response = await session.defaultSession.fetch(url, {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
+      ...headers,
+    },
   });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response.text();
 }
 
 async function nodeFetchText(url, headers = {}) {
@@ -146,9 +147,12 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
   });
 
   ipcMain.handle('api:fetch-live', async (_event, url, headers = {}) => {
-    // NOTE: electron.net.request may be blocked by client-side filters (net::ERR_BLOCKED_BY_CLIENT)
-    // for some domains (e.g. api.live.bilibili.com). Using Node.js fetch bypasses session filters.
-    return nodeFetchText(url, headers);
+    // Use Electron net.request (Chromium stack) which is harder for anti-bot measures.
+    // For Bilibili API fall back to Node.js fetch to avoid client-side filter blocks.
+    if (url.includes('bilibili.com') || url.includes('bilibili')) {
+      return nodeFetchText(url, headers);
+    }
+    return netGetText(url, headers);
   });
 
   ipcMain.handle('api:fetch-binary', async (_event, url, headers = {}) => {

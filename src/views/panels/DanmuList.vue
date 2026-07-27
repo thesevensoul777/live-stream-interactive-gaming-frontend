@@ -254,6 +254,14 @@ const autoScrollToBottom = function () {
 let lastMainLen = 0
 const lastPlatformLen: Record<string, number> = {}
 
+// Clear local cast state when switching platforms to prevent cross-platform mixing
+watch(() => props.platform, () => {
+  if (props.platform) {
+    casts.value = []
+    messageBuffer.value = []
+  }
+})
+
 watch(
   mainDanmu,
   (list) => {

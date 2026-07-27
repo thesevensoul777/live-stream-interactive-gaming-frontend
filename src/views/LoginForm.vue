@@ -108,7 +108,7 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMessage = ref('')
 
-function showDialog(msg) {
+function showDialog(msg:any) {
   dialogMessage.value = msg
   dialogVisible.value = true
 }

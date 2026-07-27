@@ -77,6 +77,7 @@
     "fs-extra": "^11.3.3",
     "pako": "^2.1.0",
     "pinia": "^3.0.4",
+    "tiktok-live-connector": "file:../TikTok-Live-Connector",
     "vue-i18n": "^11.4.6",
     "vue-router": "^4.6.4",
     "vue3-virtual-scroller": "^0.2.3"
