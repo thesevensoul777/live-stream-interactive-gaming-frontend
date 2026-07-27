@@ -1,103 +1,173 @@
-<template>
+﻿<template>
   <div class="login-inner-container">
+    <div class="login-bg-decoration"></div>
     <div class="form-card">
       <div class="form-header">
-        <h2>{{ isLogin ? t('login.login') : t('login.register') }}</h2>
-        <button type="button" class="language-btn" @click="toggleLanguage">
-          {{ locale === 'zh' ? t('common.switchToEnglish') : t('common.switchToChinese') }}
-        </button>
+        <div class="brand-area">
+          <div class="brand-icon">
+            <img src="@/assets/images/SoftwareIcon.jpeg" alt="" class="brand-img" />
+          </div>
+          <h2>{{ isLogin ? t('login.login') : t('login.register') }}</h2>
+        </div>
       </div>
 
-      <form @submit.prevent="handleSubmit">
-        <input 
-          class="form-input" 
-          v-model.trim="formData.username" 
-          type="text" 
-          :placeholder="t('login.username')" 
-          required 
-        />
-        <input 
-          class="form-input" 
-          v-model="formData.password" 
-          type="password" 
-          :placeholder="t('login.password')" 
-          required 
-        />
+      <form @submit.prevent="handleSubmit" class="login-form">
+        <div class="field-group">
+          <label class="field-label">{{ t('login.username') }}</label>
+          <input
+            class="form-input"
+            v-model.trim="formData.username"
+            type="text"
+            :placeholder="t('login.username')"
+            required
+            @blur="validateUsername"
+            @input="clearUsernameError"
+          />
+          <span v-if="usernameError" class="field-error">{{ usernameError }}</span>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">{{ t('login.password') }}</label>
+          <input
+            class="form-input"
+            v-model="formData.password"
+            type="password"
+            :placeholder="t('login.password')"
+            required
+          />
+        </div>
 
         <template v-if="!isLogin">
-          <input 
-            class="form-input" 
-            v-model="formData.confirmPassword" 
-            type="password" 
-            :placeholder="t('login.confirmPassword')" 
-            required 
-          />
-          <input 
-            class="form-input" 
-            v-model.trim="formData.douyin" 
-            type="text" 
-            :placeholder="t('login.douyin')" 
-            required 
-          />
-          <input 
-            class="form-input" 
-            v-model.trim="formData.ActivationCode" 
-            type="text" 
-            :placeholder="t('login.activationCode')" 
-            required 
-          />
+          <div class="field-group">
+            <label class="field-label">{{ t('login.confirmPassword') }}</label>
+            <input
+              class="form-input"
+              v-model="formData.confirmPassword"
+              type="password"
+              :placeholder="t('login.confirmPassword')"
+              required
+            />
+          </div>
+
+
+          <div class="field-group">
+            <label class="field-label">{{ t('login.activationCode') }}</label>
+            <input
+              class="form-input"
+              v-model.trim="formData.ActivationCode"
+              type="text"
+              :placeholder="t('login.activationCode')"
+              required
+            />
+          </div>
+
+
         </template>
+        <div class="divider-line"></div>
 
         <div class="btn-group">
-          <button type="submit" :disabled="loading" class="primary-btn">
+          <button type="submit" :disabled="loading" class="btn btn-primary">
             {{ loading ? t('login.loading') : (isLogin ? t('login.loginBtn') : t('login.registerBtn')) }}
           </button>
-          <button type="button" @click="toggleForm" :disabled="loading">
+          <button type="button" @click="toggleForm" :disabled="loading" class="btn btn-ghost">
             {{ isLogin ? t('login.goRegister') : t('login.backLogin') }}
           </button>
         </div>
       </form>
+
+      <div class="form-footer">
+        <button type="button" class="lang-switch" @click="toggleLanguage">
+          {{ locale === 'zh' ? t('common.switchToEnglish') : t('common.switchToChinese') }}
+        </button>
+      </div>
     </div>
   </div>
-</template>
 
+    <!-- Custom dialog -->
+  <Transition name="dialog">
+    <div v-if="dialogVisible" class="dialog-overlay" @click.self="closeDialog">
+      <div class="dialog-card">
+        <p class="dialog-message">{{ dialogMessage }}</p>
+        <button type="button" class="btn btn-primary dialog-btn" @click="closeDialog">OK</button>
+      </div>
+    </div>
+  </Transition>
+
+</template>
 <script lang="ts" setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router' // 引入路由
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { registerApi, loginApi } from '@/api/auth'
 
-const router = useRouter() // 获取路由实例
+const router = useRouter()
 const { t, locale } = useI18n()
 const isLogin = ref(true)
 const loading = ref(false)
 
-// 响应式数据
+const dialogVisible = ref(false)
+const dialogMessage = ref('')
+
+function showDialog(msg) {
+  dialogMessage.value = msg
+  dialogVisible.value = true
+}
+
+function closeDialog() {
+  dialogVisible.value = false
+  dialogMessage.value = ''
+}
+
+
+const usernameError = ref('')
+
+function validateUsername() {
+  const val = formData.username
+  if (!val) {
+    usernameError.value = ''
+    return
+  }
+  if (val.length < 6) {
+    usernameError.value = 'Username must be at least 6 characters'
+    return
+  }
+  if (val.length > 12) {
+    usernameError.value = 'Username must be at most 12 characters'
+    return
+  }
+  if (!/^[a-zA-Z0-9]+$/.test(val)) {
+    usernameError.value = 'Username may only contain English letters and numbers'
+    return
+  }
+  usernameError.value = ''
+}
+
+function clearUsernameError() {
+  usernameError.value = ''
+}
+
 const formData = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  douyin: '',
   ActivationCode: 'DY-AGENT-9F3A-K2M8'
 })
 
-// 自动登录逻辑：放在 onMounted 中确保组件加载后跳转
 onMounted(() => {
   const access_token = localStorage.getItem('access_token');
   const exp = localStorage.getItem('token_exp');
   if (access_token && exp && Date.now() < Number(exp)) {
-    router.push('/main'); // 使用路由跳转
+    router.push('/main');
   }
 })
 
-// 切换登录/注册模式
 const toggleForm = () => {
   isLogin.value = !isLogin.value
-  Object.assign(formData, { 
-    username: '', 
-    password: '', 
-    confirmPassword: '', 
-    douyin: '' 
+  usernameError.value = ''
+  Object.assign(formData, {
+    username: '',
+    password: '',
+    confirmPassword: '',
   })
 }
 
@@ -108,51 +178,44 @@ const toggleLanguage = () => {
 const handleSubmit = async () => {
   if (loading.value) return
 
-  // 基础校验
-  if (!formData.username || !formData.password) return alert(t('login.validationRequired'))
-  
+  if (!formData.username || !formData.password) return showDialog(t('login.validationRequired'))
+  if (usernameError.value) return
+
   if (!isLogin.value) {
-    if (formData.password !== formData.confirmPassword) return alert(t('login.passwordMismatch'))
-    if (!formData.douyin) return alert(t('login.douyinRequired'))
+    if (formData.password !== formData.confirmPassword) return showDialog(t('login.passwordMismatch'))
   }
 
   loading.value = true
   try {
     if (isLogin.value) {
-      // 执行登录
-      const response = await loginApi({ 
-        username: formData.username, 
-        password: formData.password 
+      const response = await loginApi({
+        username: formData.username,
+        password: formData.password
       })
 
       if (response.data && response.data.data.accessToken) {
-        // 保存 Token 和过期时间 (2小时)
         localStorage.setItem('access_token', response.data.data.accessToken);
         localStorage.setItem('token_exp', (Date.now() + 7200 * 1000).toString());
 
-        // 将 Token 传给主进程（IPC）
         if ((window as any).auth) {
           (window as any).auth.setToken(response.data.data.accessToken)
         }
-        console.log("dengluchenggong")
-        // 使用路由跳转到主界面
-        router.push('/main'); 
+
+        router.push('/main');
       } else {
         throw new Error(t('login.invalidLoginResponse'));
       }
     } else {
-      // 执行注册
       await registerApi({
         username: formData.username,
         password: formData.password,
-        douyinAccount: formData.douyin,
         ActivationCode: formData.ActivationCode
       })
-      alert(t('login.registerSuccess'))
+      showDialog(t('login.registerSuccess'))
       toggleForm()
     }
   } catch (err: any) {
-    alert(err.response?.data?.message || err.message || t('login.operationFailed'))
+    showDialog(err.response?.data?.message || err.message || t('login.operationFailed'))
   } finally {
     loading.value = false
   }
@@ -160,91 +223,273 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-/* 关键修改：让最外层容器占据整个屏幕高度，并开启 Flex 居中 */
 .login-inner-container {
+  position: relative;
   width: 100%;
-  min-height: 100vh; /* 必须有高度，flex 垂直居中才有效 */
+  min-height: 100vh;
   display: flex;
-  justify-content: center; /* 水平居中 */
-  align-items: center;     /* 垂直居中 */
-  background-color: #f0f2f5; /* 加上背景色，让登录框更明显 */
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #0f1923 0%, #1a2a3a 50%, #0d1b2a 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.login-bg-decoration {
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(64, 158, 255, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.login-bg-decoration::after {
+  content: '';
+  position: absolute;
+  bottom: -40%;
+  left: -30%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(64, 158, 255, 0.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .form-card {
-  width: 90%; /* 适配小窗口 */
+  position: relative;
+  width: 90%;
   max-width: 400px;
-  padding: 2.5rem;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-  /* 确保在 Electron 窗口大小改变时依然稳定 */
-  margin: 20px; 
+  padding: 2rem 2rem 1.25rem;
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .form-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.brand-area {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #5fafff, #6fb5ff);
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.brand-img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: cover;
 }
 
 h2 {
-  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   margin: 0;
-  color: #333;
+  color: #1e1e2f;
 }
 
-.language-btn {
-  flex: 0 0 auto;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.9rem;
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #4a4a6a;
+  letter-spacing: 0.01em;
 }
 
 .form-input {
   width: 100%;
-  margin-bottom: 1.2rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  transition: border-color 0.2s;
-  box-sizing: border-box; 
+  box-sizing: border-box;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  background: #f7f8fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  outline: none;
+  font-family: inherit;
 }
 
 .form-input:focus {
-  outline: none;
   border-color: #409eff;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.12);
+}
+
+.form-input:hover:not(:focus) {
+  background: #f0f2f5;
+  border-color: #c0c4cc;
+}
+
+.form-input::placeholder {
+  color: #a8abb2;
+}
+
+.field-error {
+  font-size: 0.75rem;
+  color: #f56c6c;
+  line-height: 1.3;
+  margin-top: -0.1rem;
+  min-height: 1em;
+}
+
+.divider-line {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #e4e7ed, transparent);
+  margin: 0.5rem 0 0.75rem;
 }
 
 .btn-group {
   display: flex;
-  gap: 1rem;
-  margin-top: 0.5rem;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-button {
-  flex: 1;
-  padding: 0.75rem 0;
-  border-radius: 6px;
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.7rem 0;
+  font-size: 0.9rem;
+  font-weight: 550;
+  font-family: inherit;
+  border-radius: 8px;
   cursor: pointer;
-  border: 1px solid #dcdfe6;
-  background: #fff;
-  font-weight: 500;
-  transition: all 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  border: none;
+  outline: none;
+  letter-spacing: 0.02em;
 }
 
-.primary-btn {
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-primary {
   background-color: #409eff;
   color: #fff;
-  border: none;
+  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.3);
 }
 
-.primary-btn:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled) {
   background-color: #66b1ff;
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
 }
 
-button:disabled {
+.btn-ghost {
+  background: transparent;
+  color: #606266;
+  font-weight: 450;
+  font-size: 0.85rem;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.06);
+}
+
+.btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.form-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.lang-switch {
+  background: none;
+  border: none;
+  color: #909399;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.lang-switch:hover {
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.06);
+}
+
+/* Custom dialog */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+}
+
+.dialog-card {
+  width: 320px;
+  padding: 1.5rem 1.5rem 1.25rem;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.dialog-message {
+  margin: 0.5rem 0 1.25rem;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.dialog-btn {
+  width: 100%;
+}
+
+.dialog-enter-active,
+.dialog-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
 </style>
+
+

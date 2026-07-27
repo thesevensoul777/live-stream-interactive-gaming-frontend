@@ -1,6 +1,11 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\src",
+    "\\src\\api",
+    "\\src\\api\\dto",
+    "\\src\\assets",
+    "\\src\\assets\\images"
   ],
   "PreviewInSolutionExplorer": false
 }
