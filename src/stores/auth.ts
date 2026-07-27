@@ -5,7 +5,6 @@ import { currentUserApi } from '@/api/auth'
 export interface CurrentUser {
   id: string
   username: string
-  douyinAccount: string
   role: string
 }
 
@@ -13,7 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<CurrentUser | null>(null)
   const loading = ref(false)
 
-  // ä¼˜åŒ–ï¼šåªè¦æœ¬åœ°æœ‰ tokenï¼Œæˆ‘ä»¬å°±æš‚æ—¶è®¤ä¸ºå®ƒæ˜¯â€œå·²è®¤è¯â€çŠ¶æ€ï¼Œç›´åˆ° fetchCurrentUser å¤±è´¥
+  // ÓÅ»¯£ºÖ»Òª±¾µØÓÐ token£¬ÎÒÃÇ¾ÍÔÝÊ±ÈÏÎªËüÊÇ"ÒÑÈÏÖ¤"×´Ì¬£¬Ö±µ½ fetchCurrentUser Ê§°Ü
   const isAuthenticated = computed(() => !!user.value || !!localStorage.getItem('access_token'))
 
   async function fetchCurrentUser() {
@@ -26,17 +25,17 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       const res = await currentUserApi()
-      // å¯¹åº”ä½ çš„ ApiResponse<T> ç»“æž„ï¼šres.data æ˜¯åŒ…è£…å±‚ï¼Œres.data.data æ˜¯å…·ä½“ç”¨æˆ·
+      // ¶ÔÓ¦ÄãµÄ ApiResponse<T> ½á¹¹£ºres.data ÊÇ°ü×°²ã£¬res.data.data ÊÇ¾ßÌåÓÃ»§
       user.value = res.data.data 
-      // å¦‚æžœ Electron çŽ¯å¢ƒå­˜åœ¨ï¼ŒåŒæ­¥ Token
+      // Èç¹û Electron »·¾³´æÔÚ£¬Í¬²½ Token
         if ((window as any).auth) {
             (window as any).auth.setToken(token)
         }
      
   
     } catch (err) {
-      console.error("éªŒè¯ç™»å½•çŠ¶æ€å¤±è´¥:", err)
-      logout() // å¤±è´¥åˆ™æ¸…ç†æŽ‰æœ¬åœ°çš„ 30 å¤©è¿‡æœŸ Token
+      console.error("ÑéÖ¤µÇÂ¼×´Ì¬Ê§°Ü", err)
+      logout() // Ê§°ÜÔòÇåÀíµô±¾µØµÄ 30 Ìì¹ýÆÚ Token
     } finally {
       loading.value = false
     }
@@ -45,7 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     user.value = null
     localStorage.removeItem('access_token')
-    // å¦‚æžœæœ‰ Hash è·¯ç”±ï¼Œè·³è½¬åˆ°ç™»å½•
+    // Èç¹ûÓÐ Hash Â·ÓÉ£¬Ìø×ªµ½µÇÂ¼
     if ((window as any).auth?.clearToken) {
       (window as any).auth.clearToken()
     }

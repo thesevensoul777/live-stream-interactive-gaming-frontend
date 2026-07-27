@@ -84,8 +84,9 @@ export default {
     reset: 'Reset',
     addRobot: 'Add Bot',
     openOverlay: 'Open Effects',
+    saveRoom: 'Save',
+    saving: 'Saving...',
     douyinPlaceholder: 'Douyin account or live room ID',
-    douyuPlaceholder: 'Douyu room ID or link',
     bilibiliPlaceholder: 'Bilibili room ID or link',
     tiktokPlaceholder: 'TikTok username or live room link',
     roomRequired: 'Please enter a live room',
@@ -117,7 +118,6 @@ export default {
   platforms: {
     douyin: 'Douyin',
     bilibili: 'Bilibili',
-    douyu: 'Douyu',
     tiktok: 'TikTok',
   },
   overlay: {
@@ -185,3 +185,4 @@ export default {
     },
   },
 }
+

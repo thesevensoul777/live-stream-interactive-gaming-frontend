@@ -24,7 +24,18 @@
             v-model="platformPanels[activePlatform].room"
             class="field-input"
             :placeholder="platformPlaceholders[activePlatform]"
+            :disabled="platformPanels[activePlatform].status === 1"
           />
+                  <button
+            v-if="activePlatform === 'douyin' || activePlatform === 'bilibili' || activePlatform === 'tiktok'"
+            type="button"
+            class="save-btn"
+            :class="{ saving: savingPlatform === activePlatform }"
+            :disabled="savingPlatform === activePlatform || platformPanels[activePlatform].status === 1 || !platformPanels[activePlatform].room"
+            @click="saveRoom(activePlatform)"
+          >
+            {{ savingPlatform === activePlatform ? t('controlPanel.saving') : t('controlPanel.saveRoom') }}
+          </button>
         </div>
 
         <button
@@ -158,9 +169,12 @@ import {
   type LivePlatform,
   type LiveRoomInfo as PlatformRoomInfo,
 } from '@/core/livePlatforms'
+import { getLiveRoomApi, updateLiveRoomApi } from '@/api/liveRoom'
+import type { LiveRoomResponse } from '@/api/dto/LiveRoom'
 import { useI18n } from 'vue-i18n'
 
 const { t, tm } = useI18n()
+const savingPlatform = ref<LivePlatform | null>(null)
 
 type PlatformPlayer = {
   realId: string
@@ -185,11 +199,10 @@ type PlatformPanelState = {
   messages: PlatformMessage[]
 }
 
-const PLATFORM_ORDER: LivePlatform[] = ['douyin', 'douyu', 'bilibili', 'tiktok']
+const PLATFORM_ORDER: LivePlatform[] = ['douyin', 'bilibili', 'tiktok']
 
 const platformPlaceholders = computed<Record<LivePlatform, string>>(() => ({
   douyin: t('controlPanel.douyinPlaceholder'),
-  douyu: t('controlPanel.douyuPlaceholder'),
   bilibili: t('controlPanel.bilibiliPlaceholder'),
   tiktok: t('controlPanel.tiktokPlaceholder'),
 }))
@@ -211,7 +224,6 @@ function createPlatformPanel(room = ''): PlatformPanelState {
 const activePlatform = ref<LivePlatform>('douyin')
 const platformPanels = ref<Record<LivePlatform, PlatformPanelState>>({
   douyin: createPlatformPanel('672573338415'),
-  douyu: createPlatformPanel(''),
   bilibili: createPlatformPanel('13786821'),
   tiktok: createPlatformPanel(),
 })
@@ -235,10 +247,33 @@ const allCasts: DyMessage[] = []
 const platformRoomInfoTimers = new Map<LivePlatform, number>()
 let lastRobotContent = '2'
 
-// ── Bilibili IPC 监控状态 ──
+// ── Bilibili IPC 监控状�?──
 let biliUserId: string | null = null
 let biliCleanupFns: (() => void)[] = []
 
+
+const SAVE_PLATFORM_MAP: Partial<Record<LivePlatform, keyof Pick<LiveRoomResponse, 'douyinRoomId' | 'bilibiliRoomId' | 'tikTokRoomId'>>> = {
+  douyin: 'douyinRoomId',
+  bilibili: 'bilibiliRoomId',
+  tiktok: 'tikTokRoomId',
+}
+
+async function saveRoom(platform: LivePlatform) {
+  const roomId = platformPanels.value[platform].room
+  if (!roomId) return
+
+  const field = SAVE_PLATFORM_MAP[platform]
+  if (!field) return
+
+  savingPlatform.value = platform
+  try {
+    await updateLiveRoomApi({ [field]: roomId })
+    savingPlatform.value = null
+  } catch (err) {
+    console.error('Failed to save room ID', err)
+    savingPlatform.value = null
+  }
+}
 function pushPlatformMessage(platform: LivePlatform, userName: string, content: string) {
   const panel = platformPanels.value[platform]
   panel.messages.unshift({
@@ -315,13 +350,13 @@ function stopDouyinListen() {
 }
 
 function stopBilibiliListen() {
-  // 清理 IPC 监听器
+  // 清理 IPC 监听�?
   for (const fn of biliCleanupFns) {
     fn()
   }
   biliCleanupFns = []
 
-  // 通知主进程停止监控
+  // 通知主进程停止监�?
   if (biliUserId) {
     ;(window as any).electronAPI?.biliStopMonitor(biliUserId).catch(() => {})
     biliUserId = null
@@ -365,6 +400,23 @@ async function togglePlatformListen(platform: LivePlatform) {
   await startPlatformRoomInfoMonitor(platform)
 }
 
+async function loadLiveRoom() {
+  try {
+    const res = await getLiveRoomApi()
+    const room = res.data
+    if (room.douyinRoomId) {
+      platformPanels.value.douyin.room = room.douyinRoomId
+    }
+    if (room.bilibiliRoomId) {
+      platformPanels.value.bilibili.room = room.bilibiliRoomId
+    }
+    if (room.tikTokRoomId) {
+      platformPanels.value.tiktok.room = room.tikTokRoomId
+    }
+  } catch (err) {
+    // LiveRoom not set up yet �� that's fine
+  }
+}
 async function startBilibiliListen() {
   const panel = platformPanels.value.bilibili
   if (!panel.room) {
@@ -388,7 +440,7 @@ async function startBilibiliListen() {
       return
     }
 
-    // 使用当前登录用户的 ID 作为 Bilibili 监控的 userId
+    // 使用当前登录用户�?ID 作为 Bilibili 监控�?userId
     const currentUser = authStore.user
     if (!currentUser || !currentUser.id) {
       panel.status = 0
@@ -399,7 +451,7 @@ async function startBilibiliListen() {
     const userId = currentUser.id
     const targetRoomId = info.roomId
 
-    // 通过 IPC 通知主进程启动 Bilibili 弹幕监控
+    // 通过 IPC 通知主进程启�?Bilibili 弹幕监控
     const result = await (window as any).electronAPI.biliStartMonitor({ userId, targetRoomId })
     if (!result.ok) {
       panel.status = 0
@@ -453,7 +505,7 @@ async function startBilibiliListen() {
     })
     biliCleanupFns.push(cleanupGift)
 
-    // 监听状态变化
+    // 监听状态变�?
     const cleanupStatus = (window as any).electronAPI.onBiliStatus(userId, (status: any) => {
       if (status.type === 'connected' || status.type === 'authenticated') {
         panel.status = 1
@@ -689,15 +741,7 @@ function openOverlay() {
   ;(window as any).newWindow.openOverlay()
 }
 
-watch(
-  () => user.value?.douyinAccount,
-  (value) => {
-    if (value) {
-      platformPanels.value.douyin.room = value
-    }
-  },
-  { immediate: true },
-)
+
 
 watch(
   currentPlay,
@@ -716,6 +760,9 @@ watch(
 )
 
 onMounted(() => {
+  // Load saved live room IDs
+  loadLiveRoom()
+
   stopListening = (window as any).electronAPI.onGameSummary(async (data: any[]) => {
     clearCurrentPlay()
 
@@ -846,6 +893,29 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+
+.save-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #2f7cf6;
+  border-radius: 4px;
+  background: #2f7cf6;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.save-btn.saving {
+  background: #6c8fd6;
+  border-color: #6c8fd6;
+}
 .room-field {
   flex: 1;
 }
@@ -888,7 +958,7 @@ input[type='number'] {
   color: #fff;
   border-color: #2ecc71;
 }
-/* 1. 启动游戏按钮的正常状态 */
+/* 1. 启动游戏按钮的正常状�?*/
 .btn-launch {
   height: 32px;
   padding: 0 12px;
@@ -900,12 +970,12 @@ input[type='number'] {
   transition: all 0.2s ease;
 }
 
-/* 2. ✨ 核心修复：显式定义"启动游戏"按钮在禁用状态下的样子 */
+/* 2. �?核心修复：显式定�?启动游戏"按钮在禁用状态下的样�?*/
 .btn-launch:disabled {
   background: #bcccf6 !important; /* 变成淡淡的蓝色，表示不可点击 */
   color: #ffffff !important;       /* 强制文字为白色，绝对不会变空白！ */
   border-color: #bcccf6 !important;
-  cursor: not-allowed !important;  /* 鼠标放上去显示禁止图标 */
+  cursor: not-allowed !important;  /* 鼠标放上去显示禁止图�?*/
   opacity: 0.6;
 }
 
@@ -914,7 +984,7 @@ input[type='number'] {
   color: #fff;
   border-color: #4caf50;
 }
-/* 修改后 */
+/* 修改�?*/
 .is-confirmed {
   background: #4caf50 !important; /* 加上 important 阶级，防止被全局或默认样式覆盖成透明/空白 */
   color: #ffffff !important;
@@ -1017,3 +1087,6 @@ input[type='number'] {
   }
 }
 </style>
+
+
+

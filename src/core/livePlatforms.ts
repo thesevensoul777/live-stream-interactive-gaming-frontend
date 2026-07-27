@@ -1,4 +1,4 @@
-export type LivePlatform = 'douyin' | 'bilibili' | 'douyu' | 'tiktok'
+export type LivePlatform = 'douyin' | 'bilibili' | 'tiktok'
 
 export type LiveRoomInfo = {
   platform: LivePlatform
@@ -93,30 +93,6 @@ async function fetchBilibiliRoomInfo(input: string, fetchLive: FetchLive): Promi
   }
 }
 
-async function fetchDouyuRoomInfo(input: string, fetchLive: FetchLive): Promise<LiveRoomInfo> {
-  const roomId = pickNumericId(input)
-  const text = await fetchLive(`https://open.douyucdn.cn/api/RoomApi/room/${encodeURIComponent(roomId)}`, {
-    'User-Agent': UA,
-    Referer: `https://www.douyu.com/${roomId}`,
-  })
-  const data = safeJsonParse<any>(text)
-  if (data.error !== 0 || !data.data) {
-    throw new Error(data.msg || 'Douyu room API failed')
-  }
-
-  return {
-    platform: 'douyu',
-    roomId: String(data.data.room_id || roomId),
-    title: data.data.room_name,
-    anchor: data.data.owner_name,
-    avatar: data.data.avatar,
-    cover: data.data.room_src,
-    online: Number(data.data.online || 0),
-    status: data.data.room_status === '1' ? 'live' : 'offline',
-    raw: data,
-  }
-}
-
 async function fetchTikTokRoomInfo(input: string, fetchLive: FetchLive): Promise<LiveRoomInfo> {
   const liveUrl = input.startsWith('http') ? input : `https://www.tiktok.com/@${input.replace(/^@/, '')}/live`
   const html = await fetchLive(liveUrl, {
@@ -155,7 +131,6 @@ export async function fetchLiveRoomInfo(platform: LivePlatform, input: string): 
   const fetchLive = getFetchLive()
 
   if (platform === 'bilibili') return fetchBilibiliRoomInfo(input, fetchLive)
-  if (platform === 'douyu') return fetchDouyuRoomInfo(input, fetchLive)
   if (platform === 'tiktok') return fetchTikTokRoomInfo(input, fetchLive)
 
   return {
@@ -168,6 +143,5 @@ export async function fetchLiveRoomInfo(platform: LivePlatform, input: string): 
 export const LIVE_PLATFORM_LABEL: Record<LivePlatform, string> = {
   douyin: '抖音',
   bilibili: 'Bilibili',
-  douyu: '斗鱼',
   tiktok: 'TikTok',
 }

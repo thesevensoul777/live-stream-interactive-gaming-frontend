@@ -13,7 +13,6 @@ const currentPlay = ref<DanmuCommandDTO[]>([])
 const platformMainCasts = ref<Record<LivePlatform, DyMessage[]>>({
   douyin: [],
   bilibili: [],
-  douyu: [],
   tiktok: [],
 })
 

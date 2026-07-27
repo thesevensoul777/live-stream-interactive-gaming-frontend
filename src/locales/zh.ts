@@ -84,8 +84,9 @@ export default {
     reset: '重置',
     addRobot: '添加人机',
     openOverlay: '开启特效',
+    saveRoom: '保存',
+    saving: '保存中...',
     douyinPlaceholder: '抖音号或直播间号',
-    douyuPlaceholder: '斗鱼房间号或链接',
     bilibiliPlaceholder: 'Bilibili 房间号或链接',
     tiktokPlaceholder: 'TikTok 用户名或直播间链接',
     roomRequired: '请填写直播间',
@@ -117,7 +118,6 @@ export default {
   platforms: {
     douyin: '抖音',
     bilibili: 'Bilibili',
-    douyu: '斗鱼',
     tiktok: 'TikTok',
   },
   overlay: {
