@@ -118,7 +118,7 @@ export default {
   platforms: {
     douyin: 'Douyin',
     bilibili: 'Bilibili',
-    tiktok: 'TikTok',
+    tiktok: 'TikTok(developing)',
   },
   overlay: {
     loadingRanking: 'Loading world rankings...',

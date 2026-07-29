@@ -2,9 +2,9 @@ import { app,screen } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { Tools } from './until/tools.js';
+import { Tools } from '../until/tools.js';
 import { spawn, exec } from 'child_process';
-import { bufferService } from './services/BufferService.js';
+import { bufferService } from '../services/BufferService.js';
 
 
 // 变量声明置顶

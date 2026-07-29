@@ -118,7 +118,7 @@ export default {
   platforms: {
     douyin: '抖音',
     bilibili: 'Bilibili',
-    tiktok: 'TikTok',
+    tiktok: 'TikTok(开发中)',
   },
   overlay: {
     loadingRanking: '正在获取世界排名...',

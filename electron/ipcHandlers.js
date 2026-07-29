@@ -7,7 +7,7 @@ import {
   saveCommand,
   saveGift,
   saveLike,
-} from './war3.js';
+} from './game/war3.js';
 import { ensureUserAuthenticated, clearUserAuth, isUserAuthenticated } from './services/BiliAuthManager.js';
 import { BilibiliLiveService } from './services/BilibiliLiveService.js';
 
@@ -349,7 +349,7 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
             count: gift.num,
           };
           // 异步写入，不阻塞
-          import('./war3.js').then(({ saveGift }) => {
+          import('./game/war3.js').then(({ saveGift }) => {
             saveGift(giftPayload).catch(err => {
               console.error('[bili gift saveGift failed]', err);
             });
