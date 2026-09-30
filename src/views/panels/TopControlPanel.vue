@@ -169,6 +169,7 @@ import {
   type LivePlatform,
   type LiveRoomInfo as PlatformRoomInfo,
 } from '@/core/livePlatforms'
+import { verifyDouyinLogin } from '@/core/request'
 import { getLiveRoomApi, updateLiveRoomApi } from '@/api/liveRoom'
 import type { LiveRoomResponse } from '@/api/dto/LiveRoom'
 import { useI18n } from 'vue-i18n'
@@ -243,13 +244,15 @@ let stopListening: (() => void) | undefined
 let castWs: DyCast | undefined
 let relayWs: RelayCast | undefined
 const castSet = new Set<string>()
+const biliCastSet = new Set<string>()
 const allCasts: DyMessage[] = []
 const platformRoomInfoTimers = new Map<LivePlatform, number>()
 let lastRobotContent = '2'
 
-// ── Bilibili IPC 监控状�?──
+// ── Bilibili IPC 监控状�?──
 let biliUserId: string | null = null
 let biliCleanupFns: (() => void)[] = []
+let douyinStarting = false
 
 
 const SAVE_PLATFORM_MAP: Partial<Record<LivePlatform, keyof Pick<LiveRoomResponse, 'douyinRoomId' | 'bilibiliRoomId' | 'tikTokRoomId'>>> = {
@@ -349,16 +352,21 @@ function stopDouyinListen() {
   platformPanels.value.douyin.messages = []
 }
 
-function stopBilibiliListen() {
-  // 清理 IPC 监听�?
+async function stopBilibiliListen() {
+  // 清理 IPC 监听�?
   for (const fn of biliCleanupFns) {
     fn()
   }
   biliCleanupFns = []
+  biliCastSet.clear()
 
-  // 通知主进程停止监�?
+  // 通知主进程停止监�?
   if (biliUserId) {
-    ;(window as any).electronAPI?.biliStopMonitor(biliUserId).catch(() => {})
+    try {
+      await (window as any).electronAPI?.biliStopMonitor(biliUserId)
+    } catch {
+      // Ignore stop failures and still clear local listeners.
+    }
     biliUserId = null
   }
 
@@ -367,13 +375,13 @@ function stopBilibiliListen() {
   platformPanels.value.bilibili.messages = []
 }
 
-function stopPlatformListen(platform: LivePlatform) {
+async function stopPlatformListen(platform: LivePlatform) {
   if (platform === 'douyin') {
     stopDouyinListen()
     return
   }
   if (platform === 'bilibili') {
-    stopBilibiliListen()
+    await stopBilibiliListen()
     stopPlatformRoomInfoTimer(platform)
     return
   }
@@ -383,7 +391,7 @@ function stopPlatformListen(platform: LivePlatform) {
 
 async function togglePlatformListen(platform: LivePlatform) {
   if (platformPanels.value[platform].status === 1) {
-    stopPlatformListen(platform)
+    await stopPlatformListen(platform)
     return
   }
 
@@ -394,6 +402,11 @@ async function togglePlatformListen(platform: LivePlatform) {
 
   if (platform === 'bilibili') {
     await startBilibiliListen()
+    return
+  }
+
+  if (platform === 'tiktok') {
+    await startTikTokListen()
     return
   }
 
@@ -414,7 +427,7 @@ async function loadLiveRoom() {
       platformPanels.value.tiktok.room = room.tikTokRoomId
     }
   } catch (err) {
-    // LiveRoom not set up yet �� that's fine
+    // LiveRoom not set up yet �� that's fine
   }
 }
 async function startBilibiliListen() {
@@ -426,7 +439,7 @@ async function startBilibiliListen() {
 
   panel.error = ''
 
-  stopBilibiliListen()
+  await stopBilibiliListen()
 
   try {
     const info = await fetchLiveRoomInfo('bilibili', panel.room)
@@ -440,7 +453,7 @@ async function startBilibiliListen() {
       return
     }
 
-    // 使用当前登录用户�?ID 作为 Bilibili 监控�?userId
+    // 使用当前登录用户�?ID 作为 Bilibili 监控�?userId
     const currentUser = authStore.user
     if (!currentUser || !currentUser.id) {
       panel.status = 0
@@ -451,7 +464,7 @@ async function startBilibiliListen() {
     const userId = currentUser.id
     const targetRoomId = info.roomId
 
-    // 通过 IPC 通知主进程启�?Bilibili 弹幕监控
+    // 通过 IPC 通知主进程启�?Bilibili 弹幕监控
     const result = await (window as any).electronAPI.biliStartMonitor({ userId, targetRoomId })
     if (!result.ok) {
       panel.status = 0
@@ -465,7 +478,7 @@ async function startBilibiliListen() {
     const cleanupDanmu = (window as any).electronAPI.onBiliDanmu(userId, (danmu: any) => {
       // 将主进程传来的弹幕数据转换为 DyMessage 格式
       const msg: DyMessage = {
-        id: `bili-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: `bili-danmu-${danmu.eventId || `${danmu.uid}-${Date.now()}-${danmu.content}`}`,
         method: CastMethod.CHAT,
         user: {
           realId: danmu.uid ? `bili_${danmu.uid}` : undefined,
@@ -483,7 +496,7 @@ async function startBilibiliListen() {
     // 监听礼物数据
     const cleanupGift = (window as any).electronAPI.onBiliGift(userId, (gift: any) => {
       const msg: DyMessage = {
-        id: `bili-gift-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: `bili-gift-${gift.eventId || `${gift.uid}-${gift.giftId}-${Date.now()}`}`,
         method: CastMethod.GIFT,
         user: {
           realId: gift.uid ? `bili_${gift.uid}` : undefined,
@@ -498,6 +511,9 @@ async function startBilibiliListen() {
           repeatEnd: 1,
           icon: gift.giftIcon || '',
           price: gift.price || 0,
+          platform: 'bilibili',
+          coinType: gift.coinType || 'gold',
+          totalCoin: gift.totalCoin || 0,
         },
         time: Date.now(),
       }
@@ -505,7 +521,26 @@ async function startBilibiliListen() {
     })
     biliCleanupFns.push(cleanupGift)
 
-    // 监听状态变�?
+    // 监听点赞数据
+    const cleanupLike = (window as any).electronAPI.onBiliLike(userId, (like: any) => {
+      const msg: DyMessage = {
+        id: `bili-like-${like.eventId || `${like.uid}-${Date.now()}-${like.count}`}`,
+        method: CastMethod.LIKE,
+        user: {
+          realId: like.uid ? `bili_${like.uid}` : undefined,
+          id: String(like.uid || ''),
+          name: like.username || t('controlPanel.anonymousUser'),
+          avatar: like.faceUrl || '',
+        },
+        content: `${like.content || t('danmu.liked')} (${like.count || 1})`,
+        likeCount: String(like.count || 1),
+        time: like.timestamp || Date.now(),
+      }
+      handleBilibiliMessages([msg])
+    })
+    biliCleanupFns.push(cleanupLike)
+
+    // 监听状态变�?
     const cleanupStatus = (window as any).electronAPI.onBiliStatus(userId, (status: any) => {
       if (status.type === 'connected' || status.type === 'authenticated') {
         panel.status = 1
@@ -533,6 +568,16 @@ async function startBilibiliListen() {
 }
 
 async function startDouyinListen() {
+  if (douyinStarting) return
+  douyinStarting = true
+  try {
+    await startDouyinListenInternal()
+  } finally {
+    douyinStarting = false
+  }
+}
+
+async function startDouyinListenInternal() {
   const panel = platformPanels.value.douyin
   if (!panel.room) {
     panel.error = t('controlPanel.douyinRoomRequired')
@@ -544,8 +589,73 @@ async function startDouyinListen() {
   }
 
   panel.error = ''
+
+  // Ensure the user is logged in to Douyin first (opens login window if needed)
+  const currentUser = authStore.user
+  if (!currentUser || !currentUser.id) {
+    panel.status = 0
+    panel.error = t('controlPanel.loginRequired')
+    return
+  }
+
+  const authResult = await (window as any).electronAPI.douyinEnsureAuth(currentUser.id)
+  if (!authResult?.ok) {
+    panel.status = 0
+    panel.error = authResult?.error || t('controlPanel.douyinConnectionFailed')
+    return
+  }
+
+  let verifyError: unknown
+  let verified = false
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await verifyDouyinLogin()
+      verified = true
+      break
+    } catch (err) {
+      verifyError = err
+      if (attempt < 2) {
+        await new Promise((resolve) => window.setTimeout(resolve, 800))
+      }
+    }
+  }
+
+  if (!verified) {
+    await (window as any).electronAPI.douyinClearAuth(currentUser.id)
+    panel.status = 0
+    panel.error = verifyError instanceof Error ? verifyError.message : t('controlPanel.douyinLoginFailed')
+    return
+  }
+
   connectLive(panel.room)
   injectWar3(false)
+}
+
+async function startTikTokListen() {
+  const panel = platformPanels.value.tiktok
+  if (!panel.room) {
+    panel.error = t('controlPanel.tiktokPlaceholder')
+    return
+  }
+
+  panel.error = ''
+
+  // Ensure the user is logged in to TikTok first (opens login window if needed)
+  const currentUser = authStore.user
+  if (!currentUser || !currentUser.id) {
+    panel.status = 0
+    panel.error = t('controlPanel.loginRequired')
+    return
+  }
+
+  const authResult = await (window as any).electronAPI.tiktokEnsureAuth(currentUser.id)
+  if (!authResult?.ok) {
+    panel.status = 0
+    panel.error = authResult?.error || t('controlPanel.bilibiliStartFailed')
+    return
+  }
+
+  await startPlatformRoomInfoMonitor('tiktok')
 }
 
 function connectLive(roomId: string) {
@@ -641,8 +751,12 @@ function handleBilibiliMessages(msgs: DyMessage[]) {
 
   try {
     for (const msg of msgs) {
-      if (!msg.id) continue
+      if (!msg.id || biliCastSet.has(msg.id)) continue
+      biliCastSet.add(msg.id)
       uniqueMsgs.push(msg)
+    }
+    if (biliCastSet.size > 3000) {
+      biliCastSet.clear()
     }
   } catch {
     // keep the live loop resilient
@@ -788,7 +902,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopDouyinListen()
-  stopBilibiliListen()
+  void stopBilibiliListen()
   platformRoomInfoTimers.forEach((timer) => window.clearInterval(timer))
   platformRoomInfoTimers.clear()
   if (stopListening) stopListening()
@@ -958,7 +1072,7 @@ input[type='number'] {
   color: #fff;
   border-color: #2ecc71;
 }
-/* 1. 启动游戏按钮的正常状�?*/
+/* 1. 启动游戏按钮的正常状�?*/
 .btn-launch {
   height: 32px;
   padding: 0 12px;
@@ -970,12 +1084,12 @@ input[type='number'] {
   transition: all 0.2s ease;
 }
 
-/* 2. �?核心修复：显式定�?启动游戏"按钮在禁用状态下的样�?*/
+/* 2. �?核心修复：显式定�?启动游戏"按钮在禁用状态下的样�?*/
 .btn-launch:disabled {
   background: #bcccf6 !important; /* 变成淡淡的蓝色，表示不可点击 */
   color: #ffffff !important;       /* 强制文字为白色，绝对不会变空白！ */
   border-color: #bcccf6 !important;
-  cursor: not-allowed !important;  /* 鼠标放上去显示禁止图�?*/
+  cursor: not-allowed !important;  /* 鼠标放上去显示禁止图�?*/
   opacity: 0.6;
 }
 
@@ -984,7 +1098,7 @@ input[type='number'] {
   color: #fff;
   border-color: #4caf50;
 }
-/* 修改�?*/
+/* 修改�?*/
 .is-confirmed {
   background: #4caf50 !important; /* 加上 important 阶级，防止被全局或默认样式覆盖成透明/空白 */
   color: #ffffff !important;

@@ -1,3 +1,4 @@
+import { getAbogus } from './abogus';
 import type { DyImInfo } from './dycast';
 import { decodeResponse } from './model';
 import { getMsToken } from './signature';
@@ -50,13 +51,29 @@ export const getLiveInfo = async function (id: string) {
   }
 };
 
+/**
+ * 访问抖音 Webcast 用户入口，补齐 CSRF / 登录相关 Cookie。
+ */
+export const fetchUser = async function () {
+  try {
+    await (window as any).electronAPI.fetchLive(
+      'https://live.douyin.com/webcast/user/',
+      {
+        'X-Secsdk-Csrf-Request': '1',
+        'X-Secsdk-Csrf-Version': '1.2.22',
+      },
+      { method: 'HEAD', allowHttpError: true },
+    );
+  } catch (err) {
+    return Promise.reject(Error('Fetch Webcast User Error'));
+  }
+};
+
 const USER_AGENT =
-  navigator.userAgent ||
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const BROWSER_VERSION =
-  navigator.appVersion ||
   '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-const BROWSER_NAME = navigator.appCodeName || 'Mozilla';
+const BROWSER_NAME = 'Mozilla';
 const VERSION_CODE = 180800;
 
 /**
@@ -109,16 +126,19 @@ export const fetchImInfo = async function (roomId: string, uniqueId: string) {
       room_id: roomId,
       user_unique_id: uniqueId
     });
-    const aBogus = '00000000';
+    const paramStr = makeUrlParams(
+      Object.assign({}, defaultIMFetchParams, {
+        room_id: roomId,
+        user_unique_id: uniqueId,
+        live_pc: roomId,
+      }),
+    );
+    const aBogus = getAbogus(paramStr, USER_AGENT);
     Object.assign(params, {
       live_pc: roomId,
       a_bogus: aBogus
     });
 
-    // 关键修复：判断环境，如果是生产环境（或者直接调用 IPC），必须补全域名
-    const isDev = import.meta.env.DEV;
-    // 注意：如果是打包后，这个判断建议改为 window.location.protocol === 'file:'
-    
     const path = `/webcast/im/fetch/?${makeUrlParams(params)}`;
     
     // 强制补全域名，因为主进程 net.request 必须识别 https://
@@ -169,3 +189,85 @@ export const getImInfo = async function (roomId: string, uniqueId: string): Prom
     };
   }
 };
+
+const defaultMeFetchParam = {
+  aid: '6383',
+  app_name: 'douyin_web',
+  browser_language: 'zh-CN',
+  browser_name: 'Mozilla',
+  browser_platform: 'Win32',
+  browser_version: '120.0.0.0',
+  cookie_enabled: 'true',
+  device_platform: 'web',
+  enter_from: 'web_live',
+  language: 'zh-CN',
+  live_id: '1',
+  os_name: 'Windows',
+  os_version: '10',
+  room_id: '0',
+  screen_height: '1080',
+  screen_width: '1920',
+};
+
+export interface DouyinAccountInfo {
+  uid: string;
+  did: string;
+  nickname: string;
+  avatar: string;
+  follower: number;
+  following: number;
+  sign?: string;
+}
+
+interface DouyinAccountResponse {
+  status_code: number;
+  data?: {
+    sec_uid?: string;
+    display_id?: string;
+    nickname?: string;
+    avatar_medium?: { url_list?: string[] };
+    follow_info?: { follower_count?: number; following_count?: number };
+    signature?: string;
+    prompts?: string;
+    message?: string;
+  };
+}
+
+/**
+ * 校验当前抖音登录态，并返回登录账号信息。
+ */
+export async function verifyDouyinLogin(): Promise<DouyinAccountInfo> {
+  const params: Record<string, string> = { ...defaultMeFetchParam };
+  const paramStr = makeUrlParams(params);
+  const msToken = getMsToken(184);
+  const aBogus = getAbogus(paramStr, USER_AGENT);
+
+  Object.assign(params, {
+    msToken,
+    a_bogus: aBogus,
+  });
+
+  const text = await (window as any).electronAPI.fetchLive(
+    `https://live.douyin.com/webcast/user/me/?${makeUrlParams(params)}`,
+    {
+      Accept: 'application/json, text/plain, */*',
+      Referer: 'https://live.douyin.com/',
+    },
+  );
+  const response = JSON.parse(text) as DouyinAccountResponse;
+
+  if (response.status_code !== 0 || !response.data?.sec_uid) {
+    const message = response.data?.prompts || response.data?.message || '用户未登录或登录态已失效';
+    throw new Error(message);
+  }
+
+  return {
+    uid: response.data.sec_uid || '',
+    did: response.data.display_id || '',
+    nickname: response.data.nickname || '',
+    avatar: response.data.avatar_medium?.url_list?.[0] || '',
+    follower: response.data.follow_info?.follower_count || 0,
+    following: response.data.follow_info?.following_count || 0,
+    sign: response.data.signature || '',
+  };
+}

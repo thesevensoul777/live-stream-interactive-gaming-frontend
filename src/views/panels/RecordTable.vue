@@ -1,6 +1,5 @@
 <template>
    <div class="table-wrapper"> 
-
   <table class="table">
     <thead>
       <tr>
@@ -8,7 +7,7 @@
         <th>{{ t('records.sender') }}</th>
         <th>{{ t('records.gift') }}</th>
         <th>{{ t('records.count') }}</th>
-        <th>{{ t('records.soundWave') }}</th>
+        <th>{{ t('records.giftValue') }}</th>
         <th>{{ t('records.time') }}</th>
       </tr>
     </thead>
@@ -19,7 +18,7 @@
         <td>{{ item.user?.name }}</td>
         <td>{{ item.gift?.name }}</td>
         <td>{{ item.gift?.count }}</td>
-        <td>{{ item.gift?.price }}</td>
+        <td>{{ formatGiftValue(item.gift) }}</td>
         <td>{{ item.time ? formatTime(item.time) : '' }}</td> 
       </tr>
     </tbody>
@@ -40,7 +39,7 @@ import type { PlayerDelta } from '@/api/dto/Player'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-const { allCasts, mainCasts } = useDanmuStore()
+const { platformMainCasts } = useDanmuStore()
 
 const giftBuffer: GiftRecordRequest[] = []
 
@@ -93,6 +92,18 @@ const formatTime = (timestamp: number) => {
   return `${Y}-${M}-${D} ${h}:${m}:${s}`;
 };
 
+const formatGiftValue = (gift?: DyMessage['gift']) => {
+  if (!gift) return ''
+  const value = Number(gift.price || 0)
+  if (gift.platform === 'bilibili') {
+    const unit = gift.coinType === 'silver'
+      ? t('records.silverCoins')
+      : t('records.goldCoins')
+    return `${value} ${unit}`
+  }
+  return `${value} ${t('records.soundWave')}`
+}
+
 
 
 /**
@@ -141,7 +152,10 @@ const addCasts = function (msgs: DyMessage[], isClear: boolean = false) {
 
 const pushGift = async (rowData: DyMessage[]) => {
   const tasks = rowData
-    .filter(row => row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1)
+    .filter(row =>
+      row.gift?.platform !== 'bilibili' &&
+      (row.gift?.repeatEnd === undefined || row.gift?.repeatEnd === 1),
+    )
     .map(row =>
       onGiftReceived({
         id: row.gift?.id,
@@ -185,10 +199,33 @@ const onGiftReceived = async (gift: GiftRecordRequest) =>{
 
 
 
-watch(mainCasts, (newVal) => {
-  addCasts(mainCasts.value);
+// Track the last seen message per platform so RecordTable only processes new gifts
+const lastSeenId: Record<string, string | number | undefined> = {}
 
-}, { deep: true, immediate: true })
+watch(
+  platformMainCasts,
+  (platforms) => {
+    for (const [platform, list] of Object.entries(platforms)) {
+      if (!list.length) {
+        delete lastSeenId[platform]
+        continue
+      }
+      const lastId = lastSeenId[platform]
+      if (lastId === undefined) {
+        // First time seeing this platform: take everything
+        addCasts(list, false)
+      } else {
+        const lastIdx = list.findIndex((m) => m.id === lastId)
+        // If the list was reset/capped, fall back to the full list
+        const newItems = lastIdx === -1 ? list : list.slice(lastIdx + 1)
+        addCasts(newItems, false)
+      }
+
+      lastSeenId[platform] = list[list.length - 1]?.id
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 onMounted(() => {
   setCastType("gift", true);

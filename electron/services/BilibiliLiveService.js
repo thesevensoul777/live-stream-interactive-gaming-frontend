@@ -15,10 +15,12 @@ export class BilibiliLiveService {
   /**
    * @param {string} instanceId 唯一的实例ID（例如可以使用直播间号或者用户唯一标识）
    * @param {object} [options]
-   * @param {Function} [options.onDanmu] 弹幕回调 (danmu) => void
-   * @param {Function} [options.onGift] 礼物回调 (gift) => void
-   * @param {Function} [options.onStatus] 状态回调 (status) => void
+ * @param {Function} [options.onDanmu] 弹幕回调 (danmu) => void
+ * @param {Function} [options.onGift] 礼物回调 (gift) => void
+ * @param {Function} [options.onLike] 点赞回调 (like) => void
+ * @param {Function} [options.onStatus] 状态回调 (status) => void
    * @param {Function} [options.onError] 错误回调 (error) => void
+   * @param {Function} [options.onAuthRequired] 认证失败回调，调用后会弹出扫码登录 () => Promise<void>
    */
   constructor(instanceId, options = {}) {
     this.instanceId = String(instanceId);
@@ -37,12 +39,15 @@ export class BilibiliLiveService {
     this.roomId = null;
     this.buvid = null;
     this.credentials = null;
+    this._handledPackets = new WeakSet();
 
     // 回调
     this.onDanmu = options.onDanmu || null;
     this.onGift = options.onGift || null;
+    this.onLike = options.onLike || null;
     this.onStatus = options.onStatus || null;
     this.onError = options.onError || null;
+    this.onAuthRequired = options.onAuthRequired || null;
   }
 
   /**
@@ -196,21 +201,20 @@ export class BilibiliLiveService {
       console.log(`[BiliLive-${this.instanceId}] ✅ 新 API getDanmuInfo 成功（已认证）`);
       return authConf;
     } catch (authErr) {
-      // 如果新 API 失败（如 WBI 签名失败），降级到旧 API（匿名模式）
-      console.warn(`[BiliLive-${this.instanceId}] ⚠️ 新 API getDanmuInfo 失败: ${authErr.message}，降级到旧 API getConf（匿名模式）`);
-      const fallbackData = await this._electronBiliFetch(
-        `https://api.live.bilibili.com/room/v1/Danmu/getConf?room_id=${encodeURIComponent(String(realRoomId))}&platform=pc&player=web&web_location=102&_=${timestamp}`
-      );
-      if (fallbackData.code !== 0) {
-        throw new Error(`getConf 降级也失败: ${fallbackData.message || fallbackData.msg} (code=${fallbackData.code})`);
+      // Auth failed: trigger QR code login and retry once
+      console.warn(`[BiliLive-${this.instanceId}] Auth failed (${authErr.message}), triggering QR login...`);
+      if (this.onAuthRequired) {
+        try {
+          await this.onAuthRequired();
+          console.log(`[BiliLive-${this.instanceId}] QR login successful, retrying API...`);
+          const authConf = await this._fetchDanmuInfoWithClient(realRoomId);
+          console.log(`[BiliLive-${this.instanceId}] Retry successful, got authenticated config.`);
+          return authConf;
+        } catch (retryErr) {
+          throw new Error(`Bilibili auth failed after QR login: ${retryErr.message}`);
+        }
       }
-      const fallbackHostList = fallbackData.data?.host_server_list || [];
-      const fallbackHost = fallbackHostList[0]?.host || fallbackData.data?.host;
-      const fallbackKey = fallbackData.data?.token;
-      if (!fallbackHost || !fallbackKey) {
-        throw new Error('getConf 返回数据缺少 host 或 token');
-      }
-      return { key: fallbackKey, host: fallbackHost, address: `wss://${fallbackHost}/sub`, realRoomId, hostList: fallbackHostList, isAuthenticated: false };
+      throw new Error(`Bilibili auth failed: ${authErr.message}`);
     }
   }
 
@@ -280,6 +284,13 @@ export class BilibiliLiveService {
         this._parseAndPrintDanmu(data);
       });
 
+      // 兼容 bilibili-live-ws 在不同版本下只触发专用 cmd 事件的情况。
+      for (const command of ['SEND_GIFT', 'SEND_GIFT_V2', 'COMBO_SEND', 'LIKE_INFO_V3_CLICK']) {
+        this.ws.on(command, (packet) => {
+          this._dispatchCommand(packet);
+        });
+      }
+
       this.ws.on('live', () => {
         console.log(`[BiliLive-${this.instanceId}] ♻️ 弹幕流认证成功 #${this.totalReconnectCount + 1}`);
         if (this.onStatus) this.onStatus({ type: 'authenticated', roomId: this.roomId });
@@ -301,27 +312,120 @@ export class BilibiliLiveService {
     }
   }
 
+  _getPacketCommand(packet) {
+    return packet?.cmd || packet?.msg?.cmd || '';
+  }
+
+  _getPacketData(packet) {
+    return packet?.data ?? packet?.msg?.data ?? null;
+  }
+
+  _normalizeMediaUrl(url) {
+    if (!url) return '';
+    return String(url).startsWith('//') ? `https:${url}` : String(url);
+  }
+
+  _readProtoVarint(buffer, start) {
+    let value = 0;
+    let shift = 0;
+    let offset = start;
+    while (offset < buffer.length) {
+      const byte = buffer[offset++];
+      value += (byte & 0x7f) * 2 ** shift;
+      if (!(byte & 0x80)) return { value, offset };
+      shift += 7;
+    }
+    throw new Error('Invalid protobuf varint');
+  }
+
+  _readProtoFields(buffer) {
+    const fields = new Map();
+    let offset = 0;
+
+    while (offset < buffer.length) {
+      const tag = this._readProtoVarint(buffer, offset);
+      offset = tag.offset;
+      const field = Math.floor(tag.value / 8);
+      const wireType = tag.value & 7;
+      let value;
+
+      if (wireType === 0) {
+        const result = this._readProtoVarint(buffer, offset);
+        value = result.value;
+        offset = result.offset;
+      } else if (wireType === 1) {
+        value = buffer.subarray(offset, offset + 8);
+        offset += 8;
+      } else if (wireType === 2) {
+        const size = this._readProtoVarint(buffer, offset);
+        offset = size.offset;
+        value = buffer.subarray(offset, offset + size.value);
+        offset += size.value;
+      } else if (wireType === 5) {
+        value = buffer.subarray(offset, offset + 4);
+        offset += 4;
+      } else {
+        break;
+      }
+
+      if (!fields.has(field)) fields.set(field, []);
+      fields.get(field).push(value);
+    }
+
+    return fields;
+  }
+
+  _getProtoValue(fields, field) {
+    const values = fields.get(field);
+    return values && values.length ? values[0] : undefined;
+  }
+
+  _getProtoString(fields, field) {
+    const value = this._getProtoValue(fields, field);
+    return Buffer.isBuffer(value) ? value.toString('utf8') : '';
+  }
+
   /**
-   * 精简分发器：处理 BATCH_COMMAND（批量弹幕）和 SEND_GIFT（礼物）
-   * 注意：DANMU_MSG 由 DANMU_MSG 事件监听器直接处理，避免重复
+   * 分发礼物、点赞和 BATCH_COMMAND。
+   * DANMU_MSG 由专用事件监听器处理，避免重复。
    */
   _dispatchCommand(packet) {
     if (!packet) return;
-    const cmd = packet.cmd || packet.msg?.cmd || '';
+    if (typeof packet === 'object') {
+      if (this._handledPackets.has(packet)) return;
+      this._handledPackets.add(packet);
+    }
+
+    const cmd = this._getPacketCommand(packet);
+    const data = this._getPacketData(packet);
     
-    // 处理单条 SEND_GIFT 礼物消息
-    if (cmd === 'SEND_GIFT') {
-      this._parseAndEmitGift(packet.data);
+    if (cmd === 'SEND_GIFT' || cmd === 'COMBO_SEND') {
+      this._parseAndEmitGift(data);
       return;
     }
 
-    if (cmd === 'BATCH_COMMAND' && Array.isArray(packet.data?.list)) {
-      for (const subPacket of packet.data.list) {
-        const subCmd = subPacket?.cmd || '';
+    if (cmd === 'SEND_GIFT_V2') {
+      this._parseAndEmitGiftV2(data);
+      return;
+    }
+
+    if (cmd === 'LIKE_INFO_V3_CLICK') {
+      this._parseAndEmitLike(data);
+      return;
+    }
+
+    if (cmd === 'BATCH_COMMAND' && Array.isArray(data?.list)) {
+      for (const subPacket of data.list) {
+        const subCmd = this._getPacketCommand(subPacket);
+        const subData = this._getPacketData(subPacket);
         if (subCmd.startsWith('DANMU_MSG')) {
-          this._parseAndPrintDanmu(subPacket);
-        } else if (subCmd === 'SEND_GIFT') {
-          this._parseAndEmitGift(subPacket.data);
+          this._parseAndPrintDanmu(subData);
+        } else if (subCmd === 'SEND_GIFT' || subCmd === 'COMBO_SEND') {
+          this._parseAndEmitGift(subData);
+        } else if (subCmd === 'SEND_GIFT_V2') {
+          this._parseAndEmitGiftV2(subData);
+        } else if (subCmd === 'LIKE_INFO_V3_CLICK') {
+          this._parseAndEmitLike(subData);
         }
       }
     }
@@ -353,13 +457,16 @@ export class BilibiliLiveService {
       if (!faceUrl) {
         faceUrl = 'https://static.hdslb.com/images/member/noface.gif';
       }
+      const eventId = String(
+        info[9]?.ct || `${uid}-${info[0]?.[4] || Date.now()}-${content}`,
+      );
 
       // 如果有专属小号登录，这里出来的姓名是 100% 毫无遮挡的全称
       console.log(`[实例:${this.instanceId} 弹幕] UID: ${uid} | 名字: ${username} | 头像: ${faceUrl} | 内容: ${content}`);
 
       // 通过回调将数据发回给调用方（IPC 层负责转发到前端）
       if (this.onDanmu) {
-        this.onDanmu({ uid, username, content, faceUrl });
+        this.onDanmu({ eventId, uid, username, content, faceUrl });
       }
 
     } catch (parseErr) {
@@ -376,16 +483,22 @@ export class BilibiliLiveService {
     if (!data) return;
 
     try {
-      const giftId = String(data.giftId || '');
-      const giftName = data.giftName || '未知礼物';
-      const num = data.num || 1;
-      const uname = data.uname || '未知';
-      const uid = data.uid || 0;
-      const face = data.face || 'https://static.hdslb.com/images/member/noface.gif';
+      const giftInfo = data.gift_info || {};
+      const user = data.user || {};
+      const giftId = String(data.giftId ?? data.gift_id ?? giftInfo.gift_id ?? '');
+      const giftName = data.giftName || data.gift_name || giftInfo.gift_name || '未知礼物';
+      const num = data.num || data.combo_num || 1;
+      const uname = data.uname || user.uname || user.username || '未知';
+      const uid = data.uid ?? user.uid ?? 0;
+      const face = this._normalizeMediaUrl(
+        data.face || user.face || 'https://static.hdslb.com/images/member/noface.gif',
+      );
       const price = data.price || 0;           // 单个礼物的金瓜子价格
-      const totalCoin = data.total_coin || 0;   // 总消费金瓜子
+      const totalCoin = data.total_coin || data.combo_total_coin || price * num; // 总消费金瓜子
       const coinType = data.coin_type || 'gold';
-      const giftIcon = data.giftIcon || '';
+      const giftIcon = this._normalizeMediaUrl(
+        data.giftIcon || giftInfo.img_basic || giftInfo.img_dynamic || giftInfo.webp || '',
+      );
       const comboNum = data.combo_num || 1;
       const comboStay = data.combo_stay || 1;
       const batchComboId = data.batch_combo_id || '';
@@ -395,13 +508,16 @@ export class BilibiliLiveService {
       const discountPrice = data.discount_price || 0;
 
       // 计算人民币价值（B站 1元 = 1000金瓜子）
-      const rmbPrice = totalCoin / 1000;
+      const isFreeFanBadge = giftId === '31164';
+      const actualPrice = isFreeFanBadge ? 0 : price;
+      const actualTotalCoin = isFreeFanBadge ? 0 : totalCoin;
 
-      console.log(`[实例:${this.instanceId} 礼物] UID: ${uid} | 名字: ${uname} | 礼物: ${giftName}(${giftId}) x${num} | 金瓜子: ${totalCoin} | 头像: ${face}`);
+      console.log(`[实例:${this.instanceId} 礼物] UID: ${uid} | 名字: ${uname} | 礼物: ${giftName}(${giftId}) x${num} | 金瓜子: ${actualTotalCoin} | 头像: ${face}`);
 
       // 通过回调将数据发回给调用方
       if (this.onGift) {
         this.onGift({
+          eventId: [uid, giftId, num, data.timestamp || '', data.rnd || '', batchComboId].join(':'),
           // 基础字段
           giftId,
           giftName,
@@ -410,11 +526,11 @@ export class BilibiliLiveService {
           uid,
           face,
           // 价格字段
-          price,           // 单个价格
-          totalCoin,       // 总消费
-          rcost,           // 真实消费
+          price: actualPrice,           // 单个价格
+          totalCoin: actualTotalCoin,   // 总消费
+          rcost: isFreeFanBadge ? 0 : rcost, // 真实消费
           coinType,
-          rmbPrice,        // 人民币估算
+          rmbPrice: actualTotalCoin / 1000, // 人民币估算
           discountPrice,
           // 连击字段
           comboNum,
@@ -431,6 +547,105 @@ export class BilibiliLiveService {
       }
     } catch (parseErr) {
       console.error(`[实例:${this.instanceId} 礼物解析错误]:`, parseErr);
+    }
+  }
+
+  _parseAndEmitGiftV2(data) {
+    if (!data?.pb) return;
+
+    try {
+      const root = this._readProtoFields(Buffer.from(data.pb, 'base64'));
+      const giftFields = this._readProtoFields(this._getProtoValue(root, 10) || Buffer.alloc(0));
+      const uid = Number(this._getProtoValue(root, 1) || 0);
+      const uname = this._getProtoString(root, 2) || '未知';
+      const face = this._normalizeMediaUrl(
+        this._getProtoString(root, 3) ||
+          'https://static.hdslb.com/images/member/noface.gif',
+      );
+      const giftId = String(this._getProtoValue(giftFields, 1) ?? '');
+      const giftName = this._getProtoString(giftFields, 2) || '未知礼物';
+      const num = Number(this._getProtoValue(giftFields, 4) || 1);
+      const price = Number(this._getProtoValue(giftFields, 5) || 0);
+      const totalCoin = Number(this._getProtoValue(giftFields, 6) || price * num);
+      const coinType = this._getProtoString(giftFields, 8) || 'gold';
+      const batchComboId = this._getProtoString(giftFields, 12);
+      const timestamp = Number(this._getProtoValue(giftFields, 10) || 0);
+      const isFreeFanBadge = giftId === '31164';
+      const actualPrice = isFreeFanBadge ? 0 : price;
+      const actualTotalCoin = isFreeFanBadge ? 0 : totalCoin;
+
+      if (!giftId) return;
+
+      console.log(
+        `[实例:${this.instanceId} 礼物V2] UID: ${uid} | 名字: ${uname} | 礼物: ${giftName}(${giftId}) x${num} | 金瓜子: ${actualTotalCoin}`,
+      );
+
+      if (this.onGift) {
+        this.onGift({
+          eventId: [uid, giftId, num, batchComboId || timestamp].join(':'),
+          giftId,
+          giftName,
+          num,
+          uname,
+          uid,
+          face,
+          price: actualPrice,
+          totalCoin: actualTotalCoin,
+          rcost: actualTotalCoin,
+          coinType,
+          rmbPrice: actualTotalCoin / 1000,
+          discountPrice: 0,
+          comboNum: num,
+          comboStay: 1,
+          batchComboId,
+          medalLevel: 0,
+          medalName: '',
+          giftIcon: '',
+          timestamp: timestamp || Date.now(),
+        });
+      }
+    } catch (parseErr) {
+      console.error(`[实例:${this.instanceId} 礼物V2解析错误]:`, parseErr);
+    }
+  }
+
+  _parseAndEmitLike(data) {
+    if (!data) return;
+
+    try {
+      const user = data.user || {};
+      const uinfoBase = data.uinfo?.base || {};
+      const uid = data.uid ?? user.uid ?? 0;
+      const username =
+        data.uname ||
+        user.uname ||
+        uinfoBase.name ||
+        data.username ||
+        '未知';
+      const faceUrl = this._normalizeMediaUrl(
+        data.face ||
+          user.face ||
+          uinfoBase.face ||
+          'https://static.hdslb.com/images/member/noface.gif',
+      );
+      const count = Number(data.count || data.like_count || 1);
+      const content = data.like_text || '为主播点赞了';
+
+      console.log(`[实例:${this.instanceId} 点赞] UID: ${uid} | 名字: ${username} | 次数: ${count}`);
+
+      if (this.onLike) {
+        this.onLike({
+          eventId: `${uid}:${count}:${data.timestamp || data.trigger_time || Date.now()}`,
+          uid,
+          username,
+          faceUrl,
+          count,
+          content,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (parseErr) {
+      console.error(`[实例:${this.instanceId} 点赞解析错误]:`, parseErr);
     }
   }
 

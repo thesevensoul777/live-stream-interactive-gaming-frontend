@@ -25,7 +25,7 @@ import type {
   Text,
   User
 } from './model';
-import { getImInfo, getLiveInfo } from './request';
+import { fetchUser, getImInfo, getLiveInfo } from './request';
 import { getSignature } from './signature';
 import { logUserCast } from '@/utils/debugUtil';
 
@@ -118,7 +118,10 @@ export interface CastGift {
   count?: number | string;
   // 礼物消息可能重复发送，0 表示第一次，未重复
   repeatEnd?: number;
-
+  platform?: 'douyin' | 'bilibili' | 'tiktok';
+  coinType?: string;
+  totalCoin?: number;
+  totalFreeCoin?: number;
 }
 
 /**
@@ -666,6 +669,7 @@ export class DyCast {
         // this.reconnect();
       }
     }
+
     // 处理消息体
     if (frame) {
       // 判断消息体类型
@@ -773,8 +777,6 @@ export class DyCast {
    * 处理一次接收的消息集
    */
   private async _dealMessages(msgs?: Message[]) {
-
-   
     if (!msgs || msgs.length < 1) return;
     const messages: DyMessage[] = [];
 
@@ -796,8 +798,6 @@ export class DyCast {
     const method = msg.method;
     const data: DyMessage | null = {};
 
-   
-
     data.id = msg.msgId;
     let message = null;
     let payload = msg.payload;
@@ -815,6 +815,7 @@ export class DyCast {
           data.time = message.common?.createTime? Number(message.common.createTime): Date.now();
           break;
         case CastMethod.GIFT:
+          console.log("GIFT",payload)
           message = decodeGiftMessage(payload);
           data.method = CastMethod.GIFT;
           data.user = this._getCastUser(message.user);
@@ -956,7 +957,9 @@ export class DyCast {
       desc: data.describe,
       icon: data.image?.urlList?.[0],
       count: count,
-      repeatEnd: end
+      repeatEnd: end,
+      platform: 'douyin',
+      coinType: 'douyin'
     };
   }
 
@@ -1152,6 +1155,7 @@ private _getSocketUrl(opts: DyCastOptions) {
       const info = await getLiveInfo(roomNum);
       this.info = info;
       this.status = info.status;
+      await fetchUser();
       const res = await getImInfo(info.roomId, info.uniqueId);
       this.imInfo = res;
     } catch (err) {

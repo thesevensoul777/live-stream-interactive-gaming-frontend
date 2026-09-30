@@ -23,12 +23,13 @@ const activeMonitors = new Map();
 app.whenReady().then(async () => {
   // 3. 网络拦截准备
   await networkService.refreshTtwid();
+  networkService.setupInterceptor();
 
   // 4. 开启主窗口
   const mainWin = windowManager.createMainWindow();
 
   // 5. 注册所有 IPC 处理器 (注入依赖，包括 activeMonitors)
-  registerIpcHandlers(mainWin, bufferService, windowManager, activeMonitors);
+  registerIpcHandlers(mainWin, bufferService, windowManager, activeMonitors, networkService);
 });
 
 // 应用准备退出时，主动关闭所有 WebSocket 连接

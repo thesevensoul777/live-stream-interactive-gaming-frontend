@@ -67,8 +67,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   injectGame: () =>
     ipcRenderer.invoke('inject-game'),
 
-  fetchLive: (url, headers) =>
-    ipcRenderer.invoke('api:fetch-live', url, headers),
+  fetchLive: (url, headers, options) =>
+    ipcRenderer.invoke('api:fetch-live', url, headers, options),
 
   fetchLiveBinary: (url) =>
     ipcRenderer.invoke('api:fetch-binary', url),
@@ -161,6 +161,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   /**
+   * 监听指定主播的点赞数据
+   * @param {string} userId
+   * @param {Function} callback (like: {uid, username, faceUrl, count, content}) => void
+   * @returns {Function} 清理函数
+   */
+  onBiliLike: (userId, callback) => {
+    const channel = `bili:like-${userId}`;
+    ipcRenderer.removeAllListeners(channel);
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
+  /**
    * 监听指定主播的监控状态变化
    * @param {string} userId
    * @param {Function} callback (status) => void
@@ -187,6 +201,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },
+
+  /**
+   * 抖音登录状态 IPC
+   */
+  douyinCheckAuth: (userId) => ipcRenderer.invoke('douyin:check-auth', userId),
+  douyinEnsureAuth: (userId) => ipcRenderer.invoke('douyin:ensure-auth', userId),
+  douyinClearAuth: (userId) => ipcRenderer.invoke('douyin:clear-auth', userId),
+
+  /**
+   * TikTok 登录状态 IPC
+   */
+  tiktokCheckAuth: (userId) => ipcRenderer.invoke('tiktok:check-auth', userId),
+  tiktokEnsureAuth: (userId) => ipcRenderer.invoke('tiktok:ensure-auth', userId),
+  tiktokClearAuth: (userId) => ipcRenderer.invoke('tiktok:clear-auth', userId),
 
 });
 

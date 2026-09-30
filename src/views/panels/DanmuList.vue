@@ -44,6 +44,24 @@
         </template>
       </DynamicScroller>
     </div>
+    <div v-if="embedded" class="cast-list-footer">
+      <label class="filter-item">
+        <input type="checkbox" v-model="showGifts" />
+        <span>{{ t('danmuFilter.gifts') }}</span>
+      </label>
+      <label class="filter-item">
+        <input type="checkbox" v-model="showJoins" />
+        <span>{{ t('danmuFilter.joins') }}</span>
+      </label>
+      <label class="filter-item">
+        <input type="checkbox" v-model="showLikes" />
+        <span>{{ t('danmuFilter.likes') }}</span>
+      </label>
+      <label class="filter-item">
+        <input type="checkbox" v-model="showMessages" />
+        <span>{{ t('danmuFilter.messages') }}</span>
+      </label>
+    </div>
   </div>
 </template>
 
@@ -149,6 +167,28 @@ const setCastType = function (type: CastType, flag?: boolean) {
 /** 显示弹幕 */
 const casts = ref<DyMessage[]>([]);
 
+// Filter checkboxes for selecting which danmu types to display
+const showGifts = ref(true)
+const showJoins = ref(true)
+const showLikes = ref(true)
+const showMessages = ref(true)
+
+function applyFilterState() {
+  typeMap.set(CastMethod.GIFT, showGifts.value)
+  typeMap.set(CastMethod.MEMBER, showJoins.value)
+  typeMap.set(CastMethod.SOCIAL, showJoins.value)
+  typeMap.set(CastMethod.LIKE, showLikes.value)
+  typeMap.set(CastMethod.CHAT, showMessages.value)
+  typeMap.set(CastMethod.EMOJI_CHAT, showMessages.value)
+}
+
+watch([showGifts, showJoins, showLikes, showMessages], () => {
+  applyFilterState()
+  // Re-filter existing items immediately
+  casts.value = casts.value.filter(item => item.method && typeMap.get(item.method))
+  flushBuffer()
+})
+
 // ── Message buffer for batching ──
 const messageBuffer = ref<DyMessage[]>([])
 let flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -213,6 +253,11 @@ onMounted(() => {
       }
     }
   }
+  // Sync checkbox states from the initialized type map
+  showGifts.value = typeMap.get(CastMethod.GIFT) ?? true
+  showJoins.value = (typeMap.get(CastMethod.MEMBER) ?? true) || (typeMap.get(CastMethod.SOCIAL) ?? true)
+  showLikes.value = typeMap.get(CastMethod.LIKE) ?? true
+  showMessages.value = (typeMap.get(CastMethod.CHAT) ?? true) || (typeMap.get(CastMethod.EMOJI_CHAT) ?? true)
   // Start the batch flush timer
   startFlushTimer()
 });
@@ -521,5 +566,44 @@ $darkText: #a5a5a5;
       }
     }
   }
+}
+.cast-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  background-color: $lightBarBg;
+  box-shadow: 0px -1px 0px 0px $shadowB05, 0px -0.5px 0px 0px $shadowB1;
+}
+
+.cast-list.theme-dark .cast-list-footer {
+  background-color: $darkBarBg;
+  box-shadow: 0px -1px 0px 0px $shadowB3, 0px -0.5px 0px 0px $shadowB0;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: $lightText;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.cast-list.theme-dark .filter-item {
+  color: $darkText;
+}
+
+.filter-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #409eff;
+  cursor: pointer;
 }
 </style>

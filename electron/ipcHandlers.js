@@ -9,13 +9,29 @@ import {
   saveLike,
 } from './game/war3.js';
 import { ensureUserAuthenticated, clearUserAuth, isUserAuthenticated } from './services/BiliAuthManager.js';
+import {
+  ensureDouyinAuthenticated,
+  clearDouyinAuth,
+  clearDouyinCookiesFromSession,
+  injectCookiesToSession,
+  isDouyinAuthenticated,
+  serializeCookies as serializeDouyinCookies,
+} from './services/DouyinAuthManager.js';
+import {
+  ensureTikTokAuthenticated,
+  clearTikTokAuth,
+  isTikTokAuthenticated,
+  serializeCookies as serializeTikTokCookies,
+} from './services/TikTokAuthManager.js';
 import { BilibiliLiveService } from './services/BilibiliLiveService.js';
 
-async function netGetText(url, headers = {}) {
+async function netGetText(url, headers = {}, options = {}) {
+  const method = options.method || 'GET';
   const response = await session.defaultSession.fetch(url, {
-    method: 'GET',
+    method,
+    credentials: 'include',
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
@@ -27,10 +43,10 @@ async function netGetText(url, headers = {}) {
       ...headers,
     },
   });
-  if (!response.ok) {
+  if (!response.ok && !options.allowHttpError) {
     throw new Error(`Request failed: ${response.status}`);
   }
-  return response.text();
+  return method === 'HEAD' ? '' : response.text();
 }
 
 async function nodeFetchText(url, headers = {}) {
@@ -51,6 +67,8 @@ function netGetBuffer(url, headers = {}) {
       method: 'GET',
       url,
       headers,
+      session: session.defaultSession,
+      useSessionCookies: true,
     });
 
     request.on('response', (response) => {
@@ -77,7 +95,7 @@ async function nodeFetchBuffer(url, headers = {}) {
   return Buffer.from(ab);
 }
 
-export function registerIpcHandlers(win, bufferService, windowManager, activeMonitors = new Map()) {
+export function registerIpcHandlers(win, bufferService, windowManager, activeMonitors = new Map(), networkService = null) {
   ipcMain.handle('add-command', async (_event, payload) => {
     try {
       await saveCommand(payload);
@@ -146,24 +164,101 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
     return true;
   });
 
-  ipcMain.handle('api:fetch-live', async (_event, url, headers = {}) => {
+  ipcMain.handle('api:fetch-live', async (_event, url, headers = {}, options = {}) => {
     // Use Electron net.request (Chromium stack) which is harder for anti-bot measures.
     // For Bilibili API fall back to Node.js fetch to avoid client-side filter blocks.
     if (url.includes('bilibili.com') || url.includes('bilibili')) {
       return nodeFetchText(url, headers);
     }
-    return netGetText(url, headers);
+    return netGetText(url, headers, options);
   });
 
   ipcMain.handle('api:fetch-binary', async (_event, url, headers = {}) => {
     const finalUrl = url.startsWith('/') ? `https://live.douyin.com${url}` : url;
     // Douyin assets are sensitive to Referer/UA; keep using electron.net with forced headers.
-    return netGetBuffer(finalUrl, {
+    const merged = {
       Referer: 'https://live.douyin.com/',
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       ...headers,
-    });
+    };
+    const cookieString = networkService?.getDouyinCookieString();
+    if (cookieString && !merged.Cookie) {
+      merged.Cookie = cookieString;
+    }
+    return netGetBuffer(finalUrl, merged);
+  });
+
+  /**
+   * Douyin authentication IPC
+   * Renderer calls: window.electronAPI.douyinCheckAuth / douyinEnsureAuth / douyinClearAuth
+   */
+  ipcMain.handle('douyin:check-auth', async (_event, userId) => {
+    try {
+      const authenticated = await isDouyinAuthenticated(userId);
+      return { ok: true, authenticated };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('douyin:ensure-auth', async (_event, userId) => {
+    try {
+      const cookies = await ensureDouyinAuthenticated(userId);
+      const cookieString = serializeDouyinCookies(cookies);
+      await injectCookiesToSession(session.defaultSession, cookies);
+      console.log(`[DouyinAuth-${userId}] Synced ${cookies.length} cookies to the default session.`);
+      if (networkService) {
+        networkService.setDouyinCookies(cookies);
+      }
+      return { ok: true, cookieString };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('douyin:clear-auth', async (_event, userId) => {
+    try {
+      await clearDouyinAuth(userId);
+      await clearDouyinCookiesFromSession(session.defaultSession);
+      if (networkService) {
+        networkService.clearDouyinCookies();
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  /**
+   * TikTok authentication IPC
+   * Renderer calls: window.electronAPI.tiktokCheckAuth / tiktokEnsureAuth / tiktokClearAuth
+   */
+  ipcMain.handle('tiktok:check-auth', async (_event, userId) => {
+    try {
+      const authenticated = await isTikTokAuthenticated(userId);
+      return { ok: true, authenticated };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('tiktok:ensure-auth', async (_event, userId) => {
+    try {
+      const cookies = await ensureTikTokAuthenticated(userId);
+      return { ok: true, cookieString: serializeTikTokCookies(cookies) };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('tiktok:clear-auth', async (_event, userId) => {
+    try {
+      await clearTikTokAuth(userId);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   ipcMain.handle('select-file', async () => {
@@ -293,6 +388,12 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
 
       // 3. 创建新的弹幕服务实例
       const service = new BilibiliLiveService(userId, {
+        onAuthRequired: async () => {
+          // 先清除过期的 B 站凭证，否则 ensureUserAuthenticated 会直接复用它们而跳过扫码
+          await clearUserAuth(userId);
+          // 重新弹出扫码登录窗口
+          await ensureUserAuthenticated(userId);
+        },
         onDanmu: (danmu) => {
           // 弹幕数据回传给渲染进程
           if (win && !win.isDestroyed()) {
@@ -355,6 +456,11 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
             });
           });
         },
+        onLike: (like) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(`bili:like-${userId}`, like);
+          }
+        },
         onStatus: (status) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send(`bili:status-${userId}`, status);
@@ -374,9 +480,16 @@ export function registerIpcHandlers(win, bufferService, windowManager, activeMon
       // 4. 用主播自己的账号身份，去监听指定的 targetRoomId
       await service.connect(targetRoomId, credentials);
 
+      // If connect threw, activeMonitors entry would have been cleaned up by the catch block below
+
       return { ok: true, userId, targetRoomId };
     } catch (err) {
       console.error(`[IPC] bili:start-monitor 失败:`, err.message);
+      // Clean up monitor state if it was registered before connect failed
+      if (activeMonitors.has(userId)) {
+        activeMonitors.get(userId).close();
+        activeMonitors.delete(userId);
+      }
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });

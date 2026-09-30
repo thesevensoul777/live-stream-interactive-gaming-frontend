@@ -51,7 +51,7 @@
               <span class="points">{{ item.rankPoints || item.totalScore }}</span>
             </div>
           </div>
-         <!-- <div class="panel-footer">松开 TAB 返回游戏</div> -->
+         <!-- <div class="panel-footer">Release TAB to return to game</div> -->
         </div>  
       </div>
     </transition>
@@ -76,11 +76,11 @@ import { SYNC_CHANNELS } from '@/constants/syncChannels';
 import { useCrossWindowSync } from '@/components/composables/useCrossWindowSync';
 import { useI18n } from 'vue-i18n'
 
-// --- 变量声明置顶 ---
+// --- Variable declarations ---
 const { t } = useI18n()
 const { currentPlay } = useDanmuStore()
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
-const gameTypeId = '261CE843-5F44-418A-8D10-E49F5DEB191D' // 💡 替换为你的真实ID
+const gameTypeId = '261CE843-5F44-418A-8D10-E49F5DEB191D' // 💡 Replace with your actual ID
 
 const leftNotify = ref()
 const rightNotify = ref()
@@ -92,7 +92,7 @@ const RANK_FRAMES = [rank1Frame, rank2Frame, rank3Frame]
 const rankEffect = ref()
 
 useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
-  // [2026-01-25] 变量声明置顶
+  // [2026-01-25] Variable declarations
   const memberId = data.user?.realId || data.user?.id;
   let rankIndex = -1;
 
@@ -105,8 +105,8 @@ useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
   if (rankIndex !== -1) {
     const rankNum = rankIndex + 1;
     
-    // 1. 触发中心特写 (1-20名)
-    // 增加逻辑检查：组件存在且 push 方法可用
+    // 1. Trigger center effect (rank 1-20)
+    // Check: component exists and push method is available
     if (rankEffect.value && typeof rankEffect.value.push === 'function') {
       rankEffect.value.push({
         rank: rankNum,
@@ -119,42 +119,26 @@ useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
 });
 
 
-// useCrossWindowSync(SYNC_CHANNELS.USER_ENTRANCE, (data) => {
-//   // [2026-01-25] 变量声明置顶
-//   const memberId = data.user?.realId || data.user?.id;
-
-
-
-//       rankEffect.value.push({
-//         rank: 1,
-//         user: data.user.name,
-//         avatar: data.user.avatar
-//       });
-    
-
-  
-// });
-
 /**
- * 专门处理高排名玩家进入的播报
+ * hight-rank player'effect
  */
 const processRankEntryNotification = (user: any, rank: number) => {
   const notification = {
     id: `rank-entry-${Date.now()}`,
-    type: 'RANK', // 你可以给 CSS 增加一个 .rank 样式，做成金色气泡
+    type: 'RANK', // You can add a .rank CSS style for a golden bubble effect
     user: user.name,
     avatar: user.avatar,
     label: t('overlay.rankEntryLabel'),
     content: t('overlay.worldRank', { rank }),
-    count: rank // 或者显示奖杯图标
+    count: rank // Or show a trophy icon
   };
 
-  // 默认推送到左侧或两侧
+  // Default: push to left or right
   leftNotify.value?.push(notification);
 };
 
 
-// --- 逻辑：获取接口排行榜 (带容错) ---
+// --- Fetch leaderboard from API (with fallback) ---
 const fetchLeaderboard = async () => {
   if (typeof PlayerAPI.getMonthlyLeaderboard !== 'function') return;
   try {
@@ -170,41 +154,41 @@ const fetchLeaderboard = async () => {
 
 
 
-// --- 变量声明置顶 ---
+// --- Variable declarations ---
 const formatNumber = (num: number | string): string => {
   const n = Number(num) || 0;
   if (n < 10000) return n.toString();
   
-  // 超过1W的处理：保留两位小数并去掉末尾多余的0
-  // 例如：1.50W -> 1.5W, 1.51W -> 1.51W
+  // Values > 10000: keep 2 decimal places, strip trailing zeros
+  // e.g. 1.50W -> 1.5W, 1.51W -> 1.51W
   const w = n / 10000;
   return w.toFixed(2).replace(/\.?0+$/, "") + 'W';
 };
 
-// --- 核心业务：拦截与分发 ---
+// --- Core: intercept and dispatch ---
 const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
   const data = payload.detail || payload;
 
 
-  // 获取 realId 并匹配玩家
+  // Get realId and match player
   const realId = data.realId || data.senderId; 
   if (!realId) return;
   
  const player = currentPlay.value.find(p => p.realId === realId);
 // if (!player) return;
 
-  // 核心逻辑：根据类型定制内容
+  // Core: customize content based on type
   let displayContent = '';
   let displayCount = data.count || 1;
   let label = '';
 
   if (type === 'LIKE') {
-    // 点赞固定播报
+    // Like: fixed announcement text
     label = t('overlay.liked');
     displayContent = t('overlay.likeReward');
     displayCount = data.likeCount || 1;
   } else if (type === 'GIFT') {
-    // 礼物根据 ID 匹配功能描述
+    // Gift: match effect description by gift ID
     label = t('overlay.gained');
     const giftCommand = data.command; 
     const effectDesc = t(`gifts.desc.${giftCommand}`, LW_GIFT_DESC[giftCommand] || t('overlay.unknownPower'));
@@ -212,7 +196,7 @@ const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
     displayCount = data.count || 1;
   }
 
-  // 构造通知对象
+  // Build notification object
   const notification = {
     id: `${type.toLowerCase()}-${Date.now()}-${Math.random()}`,
     type,
@@ -223,7 +207,7 @@ const processNotification = (payload: any, type: 'GIFT' | 'LIKE') => {
     count: displayCount
   }
 
-  // 根据玩家阵营/位置推送
+  // Push based on player team/position
   if (player?.content === '1') {
     leftNotify.value?.push(notification);
   } else {
@@ -245,7 +229,7 @@ const handleKeyUp = (e: KeyboardEvent) => {
   if (e.key === 'Tab') showRankList.value = false;
 }
 
-// --- 生命周期 ---
+// --- Lifecycle ---
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
@@ -272,7 +256,7 @@ onUnmounted(() => {
 })
 </script>
 <style scoped>
-/* 绿幕底层固化 */
+/* Fixed green screen background */
 .permanent-green-bg {
   position: fixed;
   inset: 0;
@@ -287,13 +271,13 @@ onUnmounted(() => {
   height: 100vh;
 }
 
-/* 顶部灰色长条：高低错落的核心布局 */
-/* 1. 调整容器，确保子元素有足够的平分空间 */
+/* Top bar: staggered core layout */
+/* 1. Adjust container for even child spacing */
 .top-rank-bar {
   display: flex;
   justify-content: center;
   align-items: flex-end; 
-  /* 调大 gap 或者取消 gap 改用宽度平分 */
+  /* Increase gap or use width-based distribution */
   gap: 0px; 
   padding: 40px 15px 20px 15px;
   background: rgba(0, 0, 0, 0.5) !important;
@@ -301,63 +285,63 @@ onUnmounted(() => {
   min-height: 140px;
 }
 
-/* 2. 核心修复：给槽位设置固定宽度 */
+/* 2. Core fix: give each slot a fixed width */
 .rank-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 💡 设置一个固定宽度，确保左中右三个“坑位”一样大 */
+  /* 💡 Fixed width to keep left, center, right slots equal */
   width: 30px; 
   text-align: center;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 3. 昵称处理：防止名字太长撑开宽度导致不对称 */
+/* 3. Nickname: prevent long names from breaking layout symmetry */
 .nickname {
   font-size: 14px;
   font-weight: bold;
   color: white;
-  width: 100%; /* 撑满 slot 宽度 */
-  white-space: nowrap; /* 不换行 */
-  overflow: hidden; /* 超出隐藏 */
-  text-overflow: ellipsis; /* 显示省略号 */
+  width: 100%; /* Fill slot width */
+  white-space: nowrap; /* Prevent wrapping */
+  overflow: hidden; /* Hide overflow */
+  text-overflow: ellipsis; /* Show ellipsis */
   text-shadow: 0 2px 4px rgba(0,0,0,0.5);
   margin-top: 5px;
 }
 
-/* --- 保持之前的排序逻辑 --- */
-/* --- 第一名头像与相框专项调大 --- */
+/* --- Keep previous ordering logic --- */
+/* --- Rank 1: larger avatar and frame --- */
 .rank-1 .avatar-img { 
-  width: 70px;  /* 从 50px 增加到 70px */
-  height: 70px; 
+  width: 70px;  /* Increased from 50px to 70px */
+  height: 70px;
 }
 
 .rank-1 .rank-frame-webp {
-  /* 因为头像变大了，相框的 inset 和尺寸也要同步调整 */
+  /* Avatar is larger, so frame inset and size must match */
   inset: -20px; 
   width: calc(100% + 40px);
   height: calc(100% + 40px);
 }
 .rank-1 { 
   order: 2; 
-  transform: translateY(-25px); /* 稍微再往上提一点，更有立体感 */
+  transform: translateY(-25px); /* Slightly higher for more depth */
   z-index: 10; 
-  width: 160px; /* 从 140px 增加到 160px */
+  width: 160px; /* Increased from 140px to 160px */
 }
 .rank-2 { order: 1; transform: translateY(-5px); }
 .rank-3 { order: 3; transform: translateY(5px); }
 .rank-3 .avatar-img { border: 2px solid #CD7F32; }
 
-/* 头像容器 */
+/* Avatar container */
 .avatar-box { position: relative; }
 .avatar-img { width: 50px; height: 50px; border-radius: 50%; background: #222; }
 
 
-/* --- 修正后的关键帧动画 --- */
+/* --- Corrected keyframe animation --- */
 @keyframes frame-subtle-pulse {
   from { 
     transform: scale(1); 
-    /* 保持滤镜连写，否则会互相覆盖 */
+    /* Keep filter shorthand to prevent override conflicts */
     filter: brightness(1) drop-shadow(0 0 8px rgba(255, 215, 0, 0.3)); 
   }
   to { 
@@ -366,7 +350,7 @@ onUnmounted(() => {
   }
 }
 
-/* --- 修正后的类定义 --- */
+/* --- Corrected class definitions --- */
 .rank-frame-webp {
   position: absolute;
   inset: -15px; 
@@ -374,9 +358,9 @@ onUnmounted(() => {
   height: calc(100% + 30px);
   z-index: 2;
   pointer-events: none;
-  /* 初始滤镜状态 */
+  /* Initial filter state */
   filter: brightness(1) drop-shadow(0 0 8px rgba(255, 215, 0, 0.3));
-  /* 引用修正后的动画 */
+  /* Reference corrected animation */
   animation: frame-subtle-pulse 2s ease-in-out infinite alternate;
 }
 
@@ -402,7 +386,7 @@ onUnmounted(() => {
 
 .loading-placeholder { color: rgba(255,255,255,0.4); font-size: 14px; padding-bottom: 20px; }
 
-/* TAB 遮罩 */
+/* TAB overlay mask */
 .full-rank-overlay {
   position: fixed;
   inset: 0;
@@ -419,49 +403,49 @@ onUnmounted(() => {
   border-radius: 15px;
   overflow: hidden;
 }
-/* 标题头：缩小高度 */
+/* Header: reduce height */
 .panel-header { 
-  padding: 10px; /* 从 15px 缩小到 10px */
+  padding: 10px; /* Reduced from 15px to 10px */
   background: #222; 
   color: gold; 
   font-weight: bold; 
   text-align: center; 
-  font-size: 14px; /* 稍微缩小字体 */
+  font-size: 14px; /* Slightly smaller font */
 }
 
-/* 列表主体：保持高度限制 */
+/* List body: keep height limited */
 .list-body { 
   max-height: 400px; 
   overflow-y: auto; 
   background: #111; 
 }
 
-/* 列表项：压缩垂直内边距 */
+/* List item: compress vertical padding */
 .list-item { 
   display: flex; 
   align-items: center; 
-  padding: 6px 15px; /* 垂直方向从 12px 压缩到 6px，水平从 25px 缩到 15px */
+  padding: 6px 15px; /* Vertical: 12px -> 6px, Horizontal: 25px -> 15px */
   border-bottom: 1px solid #222; 
   color: white; 
-  font-size: 13px; /* 整体字号微调 */
+  font-size: 13px; /* Slightly smaller overall */
 }
 
-/* 头像：稍微缩小并收紧间距 */
+/* Avatar: slightly smaller, tighter spacing */
 .list-item img { 
-  width: 30px; /* 从 35px 缩小到 30px */
-  height: 30px; 
+  width: 30px; /* Reduced from 35px to 30px */
+  height: 30px;
   border-radius: 50%; 
-  margin: 0 10px; /* 从 15px 缩小到 10px */
+  margin: 0 10px; /* Reduced from 15px to 10px */
 }
 
-/* 排名序号 */
+/* Rank number */
 .list-item .num {
   width: 25px;
   color: #888;
   font-size: 12px;
 }
 
-/* 名字：由于增加了新字段，给名字设定基础比例 */
+/* Name: set base flex ratio since new fields were added */
 .list-item .name {
   flex: 1.5; 
   white-space: nowrap;
@@ -469,7 +453,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-/* 击杀与段位：水平平分空间，间距紧凑 */
+/* Kills & tier: even horizontal space, tight gaps */
 .list-item .kills,
 .list-item .tier {
   flex: 1;
@@ -477,7 +461,7 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* 战功分数：靠右并微调间距 */
+/* Score: right-aligned with slight spacing adjustment */
 .list-item .points { 
   flex: 1;
   text-align: right;  
@@ -487,3 +471,15 @@ onUnmounted(() => {
 
 .zoom-enter-from { opacity: 0; transform: scale(0.9); }       
 </style>
+
+<!--
+  Overlay.vue
+
+  This is the green screen (chroma-key) overlay window designed for OBS capture during live streams.
+  It displays the top 3 ranked viewers in a staggered layout, with animated rank frames,
+  and shows real-time gift notifications and entrance effects. The full leaderboard
+  is revealed when the streamer holds the TAB key.
+
+  Communication with other windows happens via BroadcastChannel (useCrossWindowSync)
+  for gift events, entrance notifications, and player data updates.
+-->

@@ -35,12 +35,25 @@ export interface BiliDanmuData {
 
 export interface BiliGiftData {
   uid: number
-  username: string
+  uname: string
   giftName: string
   giftId: string
   num: number
-  faceUrl: string
+  face: string
+  giftIcon: string
   price: number
+  totalCoin: number
+  rmbPrice: number
+  timestamp: number
+}
+
+export interface BiliLikeData {
+  uid: number
+  username: string
+  faceUrl: string
+  count: number
+  content: string
+  timestamp: number
 }
 
 export interface BiliMonitorStatus {
@@ -227,6 +240,22 @@ export function useBiliMonitor(userId: string) {
   }
 
   /**
+   * 监听点赞数据
+   * @param callback 点赞回调
+   * @returns 清理函数
+   */
+  function onLike(callback: (like: BiliLikeData) => void): () => void {
+    if (!isElectron()) {
+      return () => {}
+    }
+
+    const api = getElectronAPI()
+    const cleanup = api.onBiliLike(userId, callback)
+    cleanupFns.push(cleanup)
+    return cleanup
+  }
+
+  /**
    * 监听监控状态变化
    * @param callback 状态回调
    * @returns 清理函数
@@ -323,6 +352,7 @@ export function useBiliMonitor(userId: string) {
     clearAuth,
     onDanmu,
     onGift,
+    onLike,
     onStatus,
     onError,
     getActiveMonitors,

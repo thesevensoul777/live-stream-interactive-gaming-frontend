@@ -119,15 +119,21 @@ const doms = computed(() => {
             text: t('danmu.sentGift')
           },
           {
+            node: 'text',
+            text: props.gift.name
+          }
+        ];
+        if (props.gift.icon) {
+          list.splice(1, 0, {
             node: 'icon',
             text: props.gift.name,
             url: props.gift.icon
-          },
-          {
-            node: 'text',
-            text: `× ${props.gift.count}`
-          }
-        ];
+          });
+        }
+        list.push({
+          node: 'text',
+          text: `× ${props.gift.count}`
+        });
       } else {
         list = [
           {
